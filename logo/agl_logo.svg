@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <style>
+      .sketch-line { fill: none; stroke: #D9D5E1; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+      .sketch-thin { fill: none; stroke: #9C9AA2; stroke-width: 1.2; stroke-linecap: round; opacity: 0.6; }
+      .accent { fill: none; stroke: #DCE35B; stroke-width: 2; stroke-linecap: round; }
+      .accent-fill { fill: #DCE35B; }
+      .text-agl { fill: #D9D5E1; font-family: 'Georgia', serif; font-size: 72px; font-weight: bold; letter-spacing: 8px; }
+      .text-sub { fill: #9C9AA2; font-family: 'IBM Plex Sans Arabic', sans-serif; font-size: 14px; }
+      .text-en { fill: #5C5A64; font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 3px; }
+    </style>
+  </defs>
+
+  <!-- خلفية شفافة (تتكيف مع داكن وفاتح) -->
+
+  <!-- الدماغ: رسم رصاص بخطوط يدوية -->
+  <g class="sketch-line" transform="translate(200, 170)">
+    <!-- الشكل العام للدماغ -->
+    <path d="M-80,-10 C-85,-45 -60,-70 -30,-75 C-10,-78 15,-75 35,-65 C60,-52 78,-28 75,0 C73,20 60,38 40,48 C20,55 -10,55 -35,48 C-60,40 -78,18 -80,-10 Z"/>
+    <!-- الخط الفاصل (نصف الكرة) -->
+    <path class="sketch-thin" d="M0,-75 C5,-50 3,-20 0,10 C-2,30 0,45 0,50"/>
+    <!-- تجاعيد الدماغ (خطوط داخلية بأسلوب الرسم اليدوي) -->
+    <path class="sketch-thin" d="M-60,-40 C-50,-50 -35,-45 -30,-35 C-25,-25 -35,-15 -45,-20"/>
+    <path class="sketch-thin" d="M-50,-5 C-40,-15 -25,-10 -20,0 C-15,10 -25,18 -35,15"/>
+    <path class="sketch-thin" d="M-30,25 C-20,15 -5,18 0,28 C5,38 -5,45 -15,42"/>
+    <path class="sketch-thin" d="M15,-50 C25,-55 40,-48 42,-38 C44,-28 35,-20 25,-25"/>
+    <path class="sketch-thin" d="M30,-10 C42,-18 55,-10 55,2 C55,12 45,18 35,12"/>
+    <path class="sketch-thin" d="M35,30 C45,22 58,28 58,40 C58,48 48,52 40,48"/>
+    <path class="sketch-thin" d="M-15,40 C-5,32 10,35 15,42"/>
+    <!-- نقاط عصبية (وصلات) -->
+    <circle class="sketch-thin" cx="-40" cy="-30" r="3"/>
+    <circle class="sketch-thin" cx="-20" cy="5" r="3"/>
+    <circle class="sketch-thin" cx="20" cy="-30" r="3"/>
+    <circle class="sketch-thin" cx="40" cy="15" r="3"/>
+    <circle class="sketch-thin" cx="0" cy="35" r="3"/>
+  </g>
+
+  <!-- نقطة الليموني (العنصر اللامع الوحيد) -->
+  <circle class="accent-fill" cx="200" cy="170" r="6"/>
+  <circle cx="200" cy="170" r="12" fill="none" stroke="#DCE35B" stroke-width="1" opacity="0.4"/>
+  <circle cx="200" cy="170" r="20" fill="none" stroke="#DCE35B" stroke-width="0.8" opacity="0.2"/>
+
+  <!-- الاسم -->
+  <text class="text-agl" x="200" y="300" text-anchor="middle">AGL</text>
+
+  <!-- الوصف العربي -->
+  <text class="text-sub" x="200" y="335" text-anchor="middle">العقل الهندسي الموحد</text>
+
+  <!-- الوصف الإنجليزي -->
+  <text class="text-en" x="200" y="360" text-anchor="middle">THE ENGINEERING MIND</text>
+
+  <!-- خط فاصل -->
+  <line x1="120" y1="375" x2="280" y2="375" stroke="#DCE35B" stroke-width="0.5" opacity="0.4"/>
+</svg>
