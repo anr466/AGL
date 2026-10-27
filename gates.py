@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """gates.py — البوابات الإجبارية: تحويل قوانين engineering-os إلى كود يفرض نفسه.
-الفلسفة: القاعدة النصية تُنسى تحت الضغط — القاعدة داخل الأداة مستحيلة التجاوز.
-أي سكربت بناء/تنفيذ يستورد هذه البوابات ولا ينفذ خطوة بدونها."""
+الفلسفة: القاعدة النصية تُنسى تحت الضغط — القاعدة داخل الأداة أصعب تجاوزاً.
+أي سكربت بناء/تنفيذ يستورد هذه البوابات ولا ينفذ خطوة بدونها.
+ملاحظة صدق: البوابات تفحص ما يُمرَّر لها؛ صدق مصدر الأدلة (قراءة مستقلة فعلية) مسؤولية المستدعي."""
 
-import time
 
 class GateViolation(Exception):
     """البوابة رفضت الخطوة — التوقف إجباري وليس اختيارياً."""
     pass
 
+
 # ═══ بوابة 1: التحقق الكافي (قائمة الفحوص الأربعة) ═══
 
-def verify_readback(expected_count, readback_fn, label, min_checks=4):
+def verify_readback(expected_count, readback_fn, label):
     """بوابة التحقق الكافي: قراءة عكسية من المصدر بعد كل عملية.
     expected_count: العدد المتوقع
     readback_fn: دالة ترجع (actual_count, evidence_dict) من المصدر المستقل
+                 evidence_dict يحمل المفاتيح: stored / visible / timestamp
     label: اسم العملية للسجل
     ترمي GateViolation إذا لم تطابق — لا رسائل نجاح بلا فحوص."""
     actual, evidence = readback_fn()
@@ -27,7 +29,7 @@ def verify_readback(expected_count, readback_fn, label, min_checks=4):
     failed = [k for k, v in checks.items() if not v]
     if failed:
         raise GateViolation(f'[{label}] فشل التحقق الكافي — الفحوص الناقصة: {", ".join(failed)} | '
-                           f'المتوقع {expected_count}، الفعلي {actual}')
+                            f'المتوقع {expected_count}، الفعلي {actual}')
     return {'actual': actual, 'evidence': evidence, 'checks': checks}
 
 
@@ -35,12 +37,11 @@ def verify_readback(expected_count, readback_fn, label, min_checks=4):
 
 class StopRule:
     """عدّاد المسارات الفاشلة المختلفة. 3 مسارات مختلفة فشلت = توقف إجباري وصعود مُسبَّب.
-    المسار المكرر (نفس الطريقة) لا يُحسب — التكرار بلا تغيير يُرفض قبل التنفيذ."""
+    المسار المكرر (نفس الطريقة) لا يُحسب — استدعِ can_retry قبل كل محاولة لرفض التكرار."""
 
     def __init__(self, max_distinct=3):
         self.max = max_distinct
         self.tried = []          # (signature, error)
-        self._signatures = set()
 
     def record_failure(self, signature, error):
         """signature: وصف مميز لطريقة المحاولة (لا نص الخطأ)"""
@@ -60,7 +61,7 @@ class StopRule:
 # ═══ بوابة 3: حصرية الملفات (المعتمد ثابت / الوكيل يمحى ما أنشأه فقط) ═══
 
 class FileExclusivity:
-    """حارس ملفات المهمة: ما أنشأه الوكيل هذه الجلسة فقط له حق الحذف/التعديل الحُر.
+    """حارس ملفات المهمة: ما أنشأه الوكيل هذه المهمة فقط له حق الحذف/التعديل الحُر.
     ملفات المستخدم/الإنتاج = ثابتة لا تُمس دون موافقة صريحة."""
 
     def __init__(self):
@@ -88,9 +89,9 @@ def unit_before_batch(unit_fn, batch_fn, batch_args_list):
     """أول وحدة يدوياً + تحقق عكسي — ثم أتمتة البقية.
     unit_fn: تنفذ الوحدة الأولى وترجع True إذا نجح التحقق
     batch_fn: تنفذ البقية
-    أي فشل بالوحدة الأولى يمنع الدفعة (GateViolation) — الفورم مختلف عمّا افترضته."""
+    أي فشل بالوحدة الأولى يمنع الدفعة (GateViolation) — الواقع اختلف عمّا افترضته."""
     if not unit_fn():
-        raise GateViolation('فشلت الوحدة الأولى — الدفعة موقوفة. افحص: النموذج، التصنيف، المصادقة، الحقول.')
+        raise GateViolation('فشلت الوحدة الأولى — الدفعة موقوفة. افحص الافتراضات: البنية، المصادقة، المدخلات.')
     return batch_fn(batch_args_list)
 
 
@@ -103,25 +104,11 @@ FAILURE_TYPES = {
     'بيئة': 'أعد المصادقة/البيئة ثم أعد — لا تعدّل الكود لخلل بيئة',
 }
 
-def classify_failure(where, what):
-    """يصنف الفشل ويقترح البروتوكول — يستدعى في التقارير الصاعدة."""
-    if 'login' in where.lower() or 'timeout' in where.lower() or 'connection' in where.lower():
-        kind = 'بيئة'
-    elif 'field' in where.lower() or 'selector' in where.lower() or 'form' in where.lower():
-        kind = 'افتراض'
-    elif 'scope' in where.lower() or 'requirement' in where.lower():
-        kind = 'فهم'
-    else:
-        kind = 'تنفيذ'
+
+def classify_failure(kind, where, what):
+    """يسجل تصنيف الفشل الذي حدده الوكيل ويرجع بروتوكوله.
+    kind: أحد FAILURE_TYPES (افتراض/تنفيذ/فهم/بيئة) — يقرره الوكيل بعد التحليل، لا تخمين من نص.
+    ترمي GateViolation إذا كان التصنيف غير معروف."""
+    if kind not in FAILURE_TYPES:
+        raise GateViolation(f'تصنيف فشل غير معروف «{kind}» — المسموح: {", ".join(FAILURE_TYPES)}')
     return {'type': kind, 'protocol': FAILURE_TYPES[kind], 'where': where[:80], 'what': what[:120]}
-
-
-# ═══ بوابة 6: التحقق قبل الدفعة (التصنيف يعود للمقرر الصحيح) ═══
-
-def guard_category(category_id, expected_course_marker):
-    """بوابة التصنيف: يرفض التصنيف الذي لا يحمل علامة المقرر المستهدف.
-    expected_course_marker: جزء من اسم/معرف المقرر المتوقع (مثال: '33844')"""
-    if expected_course_marker and expected_course_marker not in str(category_id):
-        # التصنيف رقم لا يحمل الاسم — الفحص يُدار من المستوى الأعلى بسجل التصنيفات
-        pass
-    return True
