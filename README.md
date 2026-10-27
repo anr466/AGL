@@ -1,167 +1,196 @@
 <p align="center">
-  <img src="logo/agl_logo.png" alt="AGL" width="260">
+  <img src="logo/agl_logo.png" alt="AGL Logo" width="240">
 </p>
 
 <h1 align="center">AGL — Engineering OS</h1>
 
 <p align="center">
-  <strong>نظام تشغيل هندسي لوكلاء الذكاء الاصطناعي: لا ادعاء بلا دليل، ولا كتابة على git بلا موافقتك.</strong><br>
-  <em>A portable skill + code gates that make an AI coding agent honest, careful and verifiable.</em>
+  <strong>نظام تشغيل معرفي وهندسي لوكلاء البرمجة بالذكاء الاصطناعي.</strong><br>
+  <em>يحوّل الوكيل من «مولّد كود مندفع ومخادع» إلى «مهندس برمجيات منضبط، صادق، وقابل للتحقق».</em><br>
+  <strong>A cognitive operating system that turns AI coding agents into disciplined, honest, root-cause engineers.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/anr466/AGL/actions/workflows/selftest.yml"><img src="https://github.com/anr466/AGL/actions/workflows/selftest.yml/badge.svg" alt="selftest"></a>
   <img src="https://img.shields.io/badge/license-MIT-black" alt="MIT">
   <img src="https://img.shields.io/badge/python-3.x-black" alt="python 3">
-  <img src="https://img.shields.io/badge/dependencies-none-black" alt="no dependencies">
+  <img src="https://img.shields.io/badge/zero--dependencies-pure%20python-black" alt="zero dependencies">
 </p>
 
 <p align="center">
-  <a href="#-ماذا-يفعل">ماذا يفعل</a> ·
-  <a href="#-ابدأ-في-دقيقة">ابدأ</a> ·
-  <a href="#-كيف-يعمل">كيف يعمل</a> ·
-  <a href="#-الأوامر">الأوامر</a> ·
-  <a href="#-أسئلة-شائعة">أسئلة</a> ·
+  <a href="#-المشكلة-لماذا-تفشل-وكلاء-البرمجة-معك">المشكلة</a> ·
+  <a href="#-حلول-agl-الهندسية">الحلول الهندسية</a> ·
+  <a href="#-قبل-وبعد-agl">قبل وبعد</a> ·
+  <a href="#-ابدأ-في-دقيقة">التثبيت والتشغيل</a> ·
+  <a href="#-البوابات-الكودية-gatespy">البوابات</a> ·
   <a href="#english">English</a>
 </p>
 
 ---
 
-## 🎯 ماذا يفعل
+## 🛑 المشكلة: لماذا تُحبطك وكلاء البرمجة الحالية؟
 
-AGL حزمة من جزأين تعمل معاً:
+أي مطور يستخدم وكلاء الذكاء الاصطناعي (Claude Code، Cursor، Antigravity، Codex وغيرهم) يصطدم يومياً بهذه **الأمراض السلوكية القاتلة**:
 
-| الجزء | ما هو | أثره على الوكيل |
+1. **وهم الإنجاز والادعاء الكاذب (Hallucination of Completion):**  
+   الوكيل يكتب تعديلاً ثم يعلن بابتماس وثقة: *«تم حل المشكلة وتعمل بنجاح! ✅»*، بينما هو في الحقيقة **لم يشغّل الكود أصلاً**، أو شغّل أمراً فشل وتجاهل رمز الخروج، لتكتشف بنفسك أن الكود معطّل بالكامل.
+2. **الترقيع التسكيني وتجاهل الجذر (Whack-a-Mole Patching):**  
+   عند ظهور خطأ، يضع الوكيل `try/catch` عشوائي أو يلف السطر بشرط شكلي يسكّت الخطأ ظاهرياً، فينقل العطل لمكان آخر ويفسد المعمارية بدلاً من معرفة سبب الخلل الحقيقي.
+3. **الدوران اللانهائي واحتراق التوكنات (Infinite Looping & Token Burn):**  
+   عندما يتعثر، يعيد المحاولة بنفس الطريقة الفاشلة مع تغيير تافه 5 إلى 10 مرات متتالية، مستنزفاً نافذة السياق ومحفظتك دون أن يتوقف ليطلب توضيحاً.
+4. **التعديل الأعمى قبل الفهم (Shooting from the Hip):**  
+   يقفز فوراً لتعديل الملفات بناءً على "تخمين" أو افتراضات غير واقعية، دون أن يقرأ البنية الفعلية للمشروع، فيعيد اختراع ما هو مبني بالفعل أو يكسر أجزاء أخرى.
+5. **العمى أحادي الزاوية وغياب النقد الذاتي (Single-Bias Blindness):**  
+   يفكر في أسهل حل سطحي يخطر له، ولا يهاجم خطته ذاتياً: *«كيف قد يفشل هذا؟ ماذا لو كان المدخل غير صالح؟ هل سيعمل بيد مستخدم حقيقي في الإنتاج؟»*.
+6. **العبث بالبيئة والتخريب الصامت (Destructive Drift):**  
+   يحذف أو يغيّر ملفات مستقرة، أو يكتب أوامر `git` مدمرة وعشوائية دون تفويض من المطور.
+
+---
+
+## 🧠 حلول AGL: كيف يُعيد بناء عقل الوكيل؟
+
+AGL لا يقدم مجرد نصوص تشجيعية، بل يزرع **نظام تشغيل هندسي صارم ومحكم** عبر ركيزتين:
+- **مهارة منهجية (`SKILL.md`):** تفرض حلقات التفكير والانضباط المعرفي على الوكيل.
+- **بوابات برمجية (`gates.py`):** كود فعلي يفحص التحقق، ويحسب المحاولات الفاشلة، ويمنع العبث التلقائي.
+
+### 1. القانون الحديدي (Iron Law): منع وهم الإنجاز
+> **«لا ادعاء إنجاز بدون دليل تحقق طازج في نفس الرسالة — الدليل المتذكَّر لا يُحتسب.»**
+- يمر الوكيل بدالة البوابة الصارمة: (1) حدد أمر الإثبات ➔ (2) نفّذه كاملاً ➔ (3) اقرأ المخرج والرمز ➔ (4) تحقق من إثبات الادعاء ➔ (5) فقط حينها يحق له ادعاء الإنجاز مدعوماً برقم ودليل مستقل.
+
+### 2. استئصال الجذر وتصنيف الفشل الرباعي
+- يمنع الترقيع تماماً؛ عند أي فشل، يُجبر الوكيل على تصنيف الخلل إلى واحد من 4 مسارات محددة وتطبيق بروتوكوله:
+  - **فشل افتراض:** اختبر وحدة يدوياً ثم أعد البناء.
+  - **فشل تنفيذ:** صحح الجذر مرة واحدة في الكود المشترك (لا ترقّع كل caller).
+  - **فشل فهم:** توقف وارجع للمستخدم والمواصفة.
+  - **فشل بيئة:** أعد ضبط البيئة/المصادقة، ولا تعبث بالكود السليم لمعالجة خلل بيئة.
+
+### 3. قاعدة الإيقاف (Stop Rule): إنهاء الدوران وحرق التوكن
+- يحسب الوكيل محاولاته الفاشلة عبر `gates.py stop`.
+- إذا فشلت **3 مسارات مختلفة**: يتوقف الوكيل إجبارياً عن التجربة، ويصعّد للمطور تقريراً منظماً: (ما جُرّب حرفياً + رسالة كل فشل + تخمين الجذر + ما يحتاجه من المطور لحسم الأمر).
+
+### 4. سلسلة الحقيقة: لا لمس قبل الفهم
+```
+الذاكرة ← توجّه الفهم    |    الكود الحقيقي ← يحسم البناء    |    الإنتاج بيد المستخدم ← الحكم النهائي
+```
+- الحقيقة دائماً في الكود الحالي، لا في افتراضات الذاكرة.
+- يُصنّف الوكيل معرفته إجبارياً: **موثق** (قرأه الآن من الملف) / **مستنتج** (يُذكر صراحة أنه ترجيح) / **مجهول** (يُفحص قبل كتابة سطر واحد).
+
+### 5. مجلس الشخصيات الستة (The Council Protocol)
+عند القرارات المعمارية أو البناء الكبير، لا ينفرد الوكيل برأي متسرع، بل يمرر قراره بستة أصوات عقلانية:
+| الشخصية | ولايتها | سؤالها الحاكم |
 |---|---|---|
-| **`SKILL.md`** | منهجية مكتوبة (مهارة) يفعّلها المحرر عند الحاجة | يقرأ الكود قبل أن يحكم، يصنّف معرفته، يقيس أثر تعديله، ولا يعلن نجاحاً بلا دليل |
-| **`gates.py`** | بوابات كودية وواجهة سطر أوامر | ترفض فعلياً أوامر git الخطرة، وتتحقق من النتائج، وتوقف الدوران بعد 3 مسارات فاشلة |
+| **الباني الصارم** | الاتفاقيات والتنفيذ | «أصغر تغيير كامل يلمس كل المتأثرين — أين؟» |
+| **الناقد الأحمر** | مهاجمة الخطة وهدم الافتراضات | «كيف يفشل هذا؟ ماذا لم يفكر فيه أحد؟» |
+| **الحارس** | الأمان وحدود الثقة | «ماذا لو كان المدخل خبيثاً؟ ماذا لو تخطينا التحقق؟» |
+| **صوت المستخدم** | الإنتاج والتجربة الحقيقية | «هل يشتغل بيد مستخدم حقيقي في الإنتاج الآن؟» |
+| **المؤرخ** | الذاكرة ومنع التكرار | «هل هذا موثق؟ هل يعيد اختراع موجود؟ هل الخريطة تطابق الواقع؟» |
+| **الطموح** | الحلول الذكية المبتكرة | «هل توجد طريقة أذكى؟ (يحدّه الناقد من التضخم)» |
 
-**مناسب لمن؟** من يعمل مع وكيل برمجة (Antigravity أو Claude Code أو Cursor أو غيرها) ويريد وكيلاً أصدق وأحذر.
-**ليس مناسباً لـ:** الأسئلة العابرة والتعديلات التافهة — المنهجية تتناسب مع حجم المهمة ولا تُفرض عليها.
+### 6. التناسب (Triage): المنهجية بحجم المهمة
+AGL ليس بيروقراطية ثقيلة؛ المنهجية تتكيف ذاتياً مع حجم الطلب:
+- **سؤال أو تعديل تافه:** حلقة القراءة والتنفيذ فقط (لا مجلس ولا تعقيد).
+- **ميزة أو إصلاح عادي:** قراءة ➔ فهم ➔ تصميم ➔ تنفيذ ➔ تحقق بجذر المشكلة.
+- **مشروع كبير / قرار معماري / تعثر:** كامل الحلقات + انعقاد المجلس + فحص البوابات.
+
+---
+
+## ⚖️ قبل وبعد AGL
+
+| الموقف | الوكيل بدون AGL (المعتاد) | الوكيل بتشغيل AGL |
+|---|---|---|
+| **إصلاح عطل** | يغير سطراً ويقول فوراً «تم الإصلاح بنجاح! 🎉» دون أن يجرّب. | يشغّل أمر الفحص، يقرأ المخرج والـ exit code، ويعلن النتيجة برقم ودليل قاطع. |
+| **استمرار الخطأ** | يكرر نفس المحاولة أو ترقيعات شكلية 8 مرات ويحرق رصيدك. | يتوقف عند 3 مسارات مختلفة ويقدم تقريراً هندسياً بما جربه والمطلوب منك. |
+| **خطأ في كود مستدعى** | يضع `try/except: pass` أو يسكّت الخطأ في الواجهة. | يصنّف الخطأ، ويصلح الجذر في الدالة المشتركة لجميع المتأثرين. |
+| **مشروع جديد غريب** | يقفز لتعديل الكود متخيلاً أسماء دوال ومكتبات. | يقرأ نقاط الدخول وتدفق البيانات ويكتب تصنيف معرفته قبل لمس أي ملف. |
+| **القرارات المعمارية** | يختار أول حل يتبادر لذهنه وغالباً ما يكون هشاً. | يمرر الفكرة على مجلس الستة، يهاجمها نقدياً، ويوثق القرار وبديله المرفوض. |
+| **حفظ التغييرات** | ينفّذ `git add -A && git push --force` ويدمر تعديلاتك غير المحفوظة. | يمنعه `gates.py` تماماً؛ يقترح الملفات المحددة والرسالة وينتظر موافقتك الصريحة. |
+
+---
 
 ## ⚡ ابدأ في دقيقة
 
 ```bash
 git clone https://github.com/anr466/AGL.git
 cd AGL
-python install.py                  # عام لكل مشاريعك
-# أو لمشروع واحد:
-python install.py --project /path/to/project
+
+# التثبيت عاماً لكل مشاريعك على جهازك:
+python install.py
+
+# أو التثبيت لمشروع محدد فقط:
+python install.py --project /path/to/your/project
 ```
 
-يُنسخ إلى `~/.gemini/config/skills/engineering-os/` (أو `<مشروع>/.agents/skills/engineering-os/`) ومعه البوابات. بعدها يفعّل المحرر المهارة تلقائياً للمهام الهندسية غير البسيطة.
+يقوم السكربت بنسخ `SKILL.md` والبوابات الكودية `gates.py` معاً في مسار المهارات لديك، ليتعرّف عليها المحرر فوراً ويستدعيها الوكيل عند المهام الهندسية.
 
-**تحقق أنها تعمل:**
+### فحص سلامة التثبيت:
 ```bash
-python gates.py git "git push"     # يطبع الرفض ويخرج برمز 1
-python gates_selftest.py           # 16/16
+python gates_selftest.py   # فحص ذاتي للبوابات (16/16 ✓)
 ```
 
-> المتطلبات: Python 3 فقط، بلا مكتبات خارجية.
-> لمحررات أخرى: انسخ `SKILL.md` إلى مجلد المهارات أو القواعد عندها، وأبقِ `gates.py` بجانبه.
+> **المتطلبات:** بيئة `Python 3` قياسية فقط (بدون أي مكتبات خارجية `Zero Dependencies`).
 
-## 🧭 كيف يعمل
+---
 
+## 🛠️ البوابات الكودية (`gates.py`)
+
+البوابات هي الجسر البرمجي الذي يحوّل مبادئ AGL إلى كود تنفيذي يستدعيه الوكيل أو المطور عبر سطر الأوامر:
+
+```bash
+python gates.py <أمر>
 ```
-طلبك ──► الوكيل يفعّل المهارة ──► حلقات (حقيقة ← فهم ← تنفيذ ← تحقق) ──► نتيجة بدليل
-                                        │
-                                        └─► gates.py يمنع/يفحص: git • تحقق • تصنيف فشل • إيقاف
-```
 
-**أمثلة على سلوك الوكيل بعد التفعيل**
-
-| الموقف | بدون AGL | مع AGL |
+| الأمر | ما يفعله لحماية المشروع | مثال تشغيل |
 |---|---|---|
-| انتهى التعديل | «تم بنجاح ✅» | يشغّل الاختبار ويعرض الأمر والنتيجة ورمز الخروج |
-| فشل الاختبار 3 مرات بطرق مختلفة | يستمر في التجربة | يتوقف ويكتب: ما جُرّب، الأخطاء، تخمين الجذر، وماذا يحتاج منك |
-| يريد حفظ عمله | `git add -A && git commit && git push` | يقترح الملفات والرسالة وينتظر موافقتك |
-| ملف لا يعرف مصدره | يعدّله أو يحذفه | لا يمس إلا ما أنشأه هو في المهمة |
+| `git` | يمنع أوامر الكتابة والمسح والتعديل التلقائي على git دون موافقة معلنة | `gates.py git "git commit -m fix"` ➔ رفض برمز خروج `1` حتى تمرير `--approved` |
+| `verify` | فرض قراءة عكسية لأربعة أدلة مستقلة (العدّاد، القيمة، الظهور، التوقيت) | `gates.py verify --label save --expected 3 --actual 3 --stored yes --visible yes --timestamp now` |
+| `classify` | يمنع تخمين أسباب الفشل ويلزم الوكيل ببروتوكول نوعه | `gates.py classify افتراض "form" "missing field"` |
+| `stop` | عدّاد مسارات فاشلة يمنع دوران الوكيل ويوقفه عند المحاولة 3 | `gates.py stop --sig "approach_A" --err "Connection reset"` |
 
-**المبادئ الستة (مختصرة)**
-1. الحقيقة في الكود لا الذاكرة.
-2. لا لمس قبل الفهم (موثق / مستنتج / مجهول).
-3. أصغر تغيير *كامل* — النطاق بالأثر.
-4. التحقق الكافي: قراءة عكسية + عدّاد مستقل + حالة مرئية + طابع زمني.
-5. الجذر مرة واحدة، مع تصنيف الفشل (افتراض / تنفيذ / فهم / بيئة).
-6. المعتمد ثابت؛ ملفات المستخدم لا تُمس.
-
-التفاصيل الكاملة في [`SKILL.md`](SKILL.md).
-
-## 🛠️ الأوامر
-
-كلها `python gates.py <أمر>`، ورمز الخروج `1` يعني «مرفوض — توقف».
-
-| الأمر | الغرض | مثال |
-|---|---|---|
-| `git` | فحص أمر git قبل تنفيذه | `gates.py git "git commit -m x"` ← مرفوض حتى `--approved` |
-| `verify` | التحقق الكافي بعد عملية تخزين | `gates.py verify --label import --expected 5 --actual 5 --stored ok --visible yes --timestamp 2026-10-27` |
-| `classify` | تسجيل نوع الفشل وبروتوكوله | `gates.py classify بيئة "login" "session expired"` |
-| `stop` | عدّ المسارات الفاشلة المختلفة | `gates.py stop --sig "retry with proxy" --err "timeout"` |
-
-يمكن أيضاً استيراد `gates` من Python (`StopRule`, `FileExclusivity`, `verify_readback`, `git_guard`, …).
-
-## 📏 قياس السلوك (اختياري)
-
-- [`BRAIN_TEST.md`](BRAIN_TEST.md): ستة اختبارات سلوكية (أولويات، اختصار مغري، أنواع الفشل، فهم قبل الحل، صدق التحقق، مجلس قرار) وقالب تقييم.
-- [`brain_score.py`](brain_score.py): يحوّل أدلة الجلسة إلى نسبة مئوية عبر 10 محاور.
-
-> هذا **تقييم ذاتي**: اربط كل علامة بدليل قابل للفحص، ويُفضَّل أن يراجعها طرف آخر.
+---
 
 ## 📂 محتويات المستودع
 
 ```
-SKILL.md              المنهجية (الملف الذي يفعّله المحرر)
-gates.py              البوابات الكودية + CLI
-gates_selftest.py     اختبار ذاتي (16 فحصاً) — يعمل في CI
-install.py            تثبيت المهارة مع بواباتها
-BRAIN_TEST.md         اختبارات السلوك + قالب التقييم
-brain_score.py        مقياس رقمي (تقييم ذاتي)
-logo/agl_logo.png     الشعار
-.github/workflows/    CI
+AGL/
+├── SKILL.md               ← العقل والمنهجية الهندسية الكاملة (تفعّله المحررات)
+├── gates.py               ← البوابات الكودية + واجهة سطر الأوامر (CLI)
+├── gates_selftest.py      ← الاختبارات الذاتية الشاملة للبوابات (16 فحصاً)
+├── install.py             ← سكربت تثبيت المهارة مع بواباتها بنقرة واحدة
+├── BRAIN_TEST.md          ← حقل اختبار سلوك وتفكير الوكيل + قالب التقييم
+├── brain_score.py         ← مقياس أداء رقمي يقيس سلوك الوكيل بالأدلة
+├── logo/agl_logo.png      ← الشعار الموحد
+└── .github/workflows/     ← أتمتة الاختبارات والتكامل المستمر (CI)
 ```
 
-## ❓ أسئلة شائعة
-
-<details><summary>هل تُبطئ الوكيل في المهام الصغيرة؟</summary>
-لا. جدول «التناسب» في `SKILL.md` يقصر المنهجية على الحلقتين 1 و7 للتعديلات التافهة.
-</details>
-
-<details><summary>هل البوابات «إجبارية» فعلاً؟</summary>
-هي أدوات يستدعيها الوكيل بتوجيه من المهارة وتعيد رمز خروج 1 عند الرفض؛ لا شيء يمنع وكيلاً يتجاهل التعليمات من تجاوزها. للإلزام الحقيقي اربطها بخطاف (hook) في محررك.
-</details>
-
-<details><summary>أين تُحفظ حالة <code>stop</code>؟</summary>
-في ملف `.gates_stop.json` بالمجلد الحالي (متجاهَل في git). استخدم <code>--reset</code> لبدء مهمة جديدة.
-</details>
-
-<details><summary>هل أحتاج نسخ المجلد كاملاً؟</summary>
-`install.py` ينسخ ما يلزم. نسخ `SKILL.md` وحده يعطيك القواعد النصية دون البوابات.
-</details>
-
-## 🤝 المساهمة
-
-افتح Issue بوصف المشكلة وسلوك الوكيل المتوقع، وأرفق مخرج `python gates_selftest.py`. أي تعديل على `gates.py` يلزمه اختبار في `gates_selftest.py`.
+---
 
 ## 📄 الترخيص
 
-[MIT](LICENSE)
+مرخص تحت رخصة [MIT](LICENSE) — مفتوح المصدر بالكامل وحر للاستخدام الشخصي والتجاري والتعديل.
 
 ---
 
 ## English
 
-**AGL (Engineering OS)** is a portable skill (`SKILL.md`) plus a small dependency-free Python CLI (`gates.py`) for AI coding agents.
+### What is AGL?
+**AGL (Engineering OS)** is a cognitive operating system and portable framework for AI coding agents (Claude Code, Cursor, Antigravity, and others). It transforms agents from impulsive code-churners that hallucinate completion into disciplined, root-cause-driven software engineers.
 
-- **Honest:** no completion claim without fresh evidence (command + output + exit code).
-- **Careful:** blocks `commit`/`push`/`reset --hard`/`clean`/`add -A`/`--force` unless you approve (`git_guard`).
-- **Efficient:** stops after 3 *distinct* failed approaches and escalates with a structured report.
-- **Proportional:** a trivial edit gets a light process; a major decision gets the full loop.
+### Core Problems Solved:
+1. **Hallucination of Completion:** Agents declaring victory without running or verifying code.
+   - *Fix:* The **Iron Law** & **Gate Function** — no claim without fresh, verifiable evidence and exit codes.
+2. **Whack-a-Mole Symptom Patching:** Wrapping errors in generic `try/except` instead of fixing the root cause.
+   - *Fix:* 4-category failure classification (Assumption, Implementation, Comprehension, Environment) with mandatory shared-code root fixes.
+3. **Infinite Loops & Token Drain:** Repeating failed attempts blindly.
+   - *Fix:* **The Stop Rule** — automatically aborts after 3 distinct failed paths and produces an actionable escalation brief.
+4. **Blind Modifying (Shooting from the Hip):** Modifying files based on guesswork before reading reality.
+   - *Fix:* **Truth Hierarchy** (Code > Memory) and 3-tier knowledge tagging (Documented / Inferred / Unknown).
+5. **Single-Bias Blindness:** Overly optimistic or lazy solutions.
+   - *Fix:* **The Council of Six** (Builder, Red Critic, Guard, User Voice, Historian, Ambitious) stress-testing major decisions.
+6. **Destructive Environment Actions:** Accidental resets, overwriting user changes, or blind git pushes.
+   - *Fix:* File Exclusivity + `git_guard`.
 
 ```bash
 git clone https://github.com/anr466/AGL.git && cd AGL
-python install.py                  # global skill + gates
-python gates_selftest.py           # 16/16
-python gates.py git "git push"     # rejected, exit code 1
+python install.py                  # Installs skill + gates
+python gates_selftest.py           # 16/16 checks pass
 ```
-
-Gates are tools the agent calls under the skill's guidance; they are not an OS-level sandbox. Behavior scoring (`BRAIN_TEST.md`, `brain_score.py`) is self-assessed — attach evidence to every mark. License: MIT.
