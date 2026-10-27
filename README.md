@@ -1,7 +1,7 @@
 # AGL — العقل الهندسي الموحد
 
 <p align="center">
-  <img src="logo/agl_logo_preview.png" alt="AGL Logo" width="300">
+  <img src="logo/agl_logo.png" alt="AGL Logo" width="300">
 </p>
 
 <p align="center">
@@ -106,9 +106,7 @@ AGL/
 ├── gates_selftest.py      ← اختبار ذاتي للبوابات
 ├── brain_score.py         ← مقياس أداء العقل (10 محاور)
 ├── BRAIN_TEST.md          ← حقل اختبار سلوكي حي
-├── logo/
-│   ├── agl_logo.svg       ← الشعار (vector)
-│   └── agl_logo_preview.png ← معاينة
+├── logo/agl_logo.png      ← الشعار (واحد موحد)
 └── docs/
     └── editorial-dark-design.md ← نظام التصميم التحريري الداكن
 ```
