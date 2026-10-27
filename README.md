@@ -125,6 +125,7 @@ python install.py --project /path/to/your/project
 ### فحص سلامة التثبيت:
 ```bash
 python gates_selftest.py   # فحص ذاتي للبوابات (16/16 ✓)
+python test_hardening.py   # اختبارات التحصين والمهام الخلفية (21 اختباراً)
 ```
 
 > **المتطلبات:** بيئة `Python 3` قياسية فقط (بدون أي مكتبات خارجية `Zero Dependencies`).
@@ -144,7 +145,9 @@ python gates.py <أمر>
 | `git` | يمنع أوامر الكتابة والمسح والتعديل التلقائي على git دون موافقة معلنة | `gates.py git "git commit -m fix"` ➔ رفض برمز خروج `1` حتى تمرير `--approved` |
 | `verify` | فرض قراءة عكسية لأربعة أدلة مستقلة (العدّاد، القيمة، الظهور، التوقيت) | `gates.py verify --label save --expected 3 --actual 3 --stored yes --visible yes --timestamp now` |
 | `classify` | يمنع تخمين أسباب الفشل ويلزم الوكيل ببروتوكول نوعه | `gates.py classify افتراض "form" "missing field"` |
-| `stop` | عدّاد مسارات فاشلة يمنع دوران الوكيل ويوقفه عند المحاولة 3 | `gates.py stop --sig "approach_A" --err "Connection reset"` |
+| `stop` | عدّاد مسارات فاشلة يمنع دوران الوكيل ويوقفه عند المحاولة 3؛ المسار المشابه يلزمه `--diff` | `gates.py stop --sig "approach_A" --err "Connection reset"` |
+| `shell` | حارس شامل: `rm`/`dd`/`find -delete`/الكتابة فوق ملف؛ يفكك `&&` و`sh -c` و`git -C` | `gates.py shell "rm -rf build"` ➔ رفض ما لم تكن مسجَّلة |
+| `files` | حصرية الملفات: سجّل **قبل** الإنشاء ولا تحذف إلا المسجَّل غير المتتبَّع | `gates.py files register scratch/t.txt` |
 
 ---
 
@@ -155,6 +158,9 @@ AGL/
 ├── SKILL.md               ← العقل والمنهجية الهندسية الكاملة (تفعّله المحررات)
 ├── gates.py               ← البوابات الكودية + واجهة سطر الأوامر (CLI)
 ├── gates_selftest.py      ← الاختبارات الذاتية الشاملة للبوابات (16 فحصاً)
+├── test_hardening.py      ← اختبارات التحصين: ثغرات git/verify/stop/ملفات + المهام الخلفية (21 اختباراً)
+├── jobs.py                ← مهام خلفية: أطلق أمراً طويلاً وواصل العمل، ثم wait/result بدليل طازج
+├── hook_pretooluse.py     ← خطّاف Claude Code يفرض البوابات ويسأل المستخدم الفعلي (فرض لا طوعي)
 ├── install.py             ← سكربت تثبيت المهارة مع بواباتها بنقرة واحدة
 ├── BRAIN_TEST.md          ← حقل اختبار سلوك وتفكير الوكيل + قالب التقييم
 ├── brain_score.py         ← مقياس أداء رقمي يقيس سلوك الوكيل بالأدلة

@@ -9,4 +9,5 @@ jobs:
         with:
           python-version: "3.x"
       - run: python gates_selftest.py
+      - run: python test_hardening.py
       - run: python brain_score.py > /dev/null

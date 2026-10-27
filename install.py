@@ -10,7 +10,7 @@ import argparse
 import shutil
 from pathlib import Path
 
-FILES = ['SKILL.md', 'gates.py', 'brain_score.py', 'BRAIN_TEST.md', 'LICENSE']
+FILES = ['SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py', 'brain_score.py', 'BRAIN_TEST.md', 'LICENSE']
 
 
 def main():
@@ -31,6 +31,7 @@ def main():
         shutil.copy2(src / f, dest / f)
     print(f'تم التثبيت في: {dest}')
     print('تنبيه: لا تُبقِ نسختين بنفس الاسم (عامة + مشروع) بإصدارين مختلفين.')
+    print('نصيحة: أضف .agl/ إلى .gitignore في مشروعك (حالة البوابات والمهام الخلفية).')
 
 
 if __name__ == '__main__':
