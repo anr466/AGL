@@ -19,6 +19,9 @@ import sys
 import time
 import uuid
 
+if os.name == 'nt':
+    sys.exit('jobs.py يعمل على Linux/macOS فقط (يعتمد على مجموعات العمليات POSIX).')
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gates import GateViolation, shell_guard, state_path, _read_json, _write_json  # noqa: E402
 

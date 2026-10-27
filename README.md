@@ -51,7 +51,7 @@
 
 AGL لا يقدم مجرد نصوص تشجيعية، بل يزرع **نظام تشغيل هندسي صارم ومحكم** عبر ركيزتين:
 - **مهارة منهجية (`SKILL.md`):** تفرض حلقات التفكير والانضباط المعرفي على الوكيل.
-- **بوابات برمجية (`gates.py`):** كود فعلي يفحص التحقق، ويحسب المحاولات الفاشلة، ويمنع العبث التلقائي.
+- **بوابات برمجية (`gates.py`):** كود فعلي يفحص التحقق، ويحسب المحاولات الفاشلة، ويحجب العبث التلقائي (والفرض الإلزامي عبر الخطّاف في Claude Code).
 
 ### 1. القانون الحديدي (Iron Law): منع وهم الإنجاز
 > **«لا ادعاء إنجاز بدون دليل تحقق طازج في نفس الرسالة — الدليل المتذكَّر لا يُحتسب.»**
@@ -103,7 +103,7 @@ AGL ليس بيروقراطية ثقيلة؛ المنهجية تتكيف ذات�
 | **خطأ في كود مستدعى** | يضع `try/except: pass` أو يسكّت الخطأ في الواجهة. | يصنّف الخطأ، ويصلح الجذر في الدالة المشتركة لجميع المتأثرين. |
 | **مشروع جديد غريب** | يقفز لتعديل الكود متخيلاً أسماء دوال ومكتبات. | يقرأ نقاط الدخول وتدفق البيانات ويكتب تصنيف معرفته قبل لمس أي ملف. |
 | **القرارات المعمارية** | يختار أول حل يتبادر لذهنه وغالباً ما يكون هشاً. | يمرر الفكرة على مجلس الستة، يهاجمها نقدياً، ويوثق القرار وبديله المرفوض. |
-| **حفظ التغييرات** | ينفّذ `git add -A && git push --force` ويدمر تعديلاتك غير المحفوظة. | يمنعه `gates.py` تماماً؛ يقترح الملفات المحددة والرسالة وينتظر موافقتك الصريحة. |
+| **حفظ التغييرات** | ينفّذ `git add -A && git push --force` ويدمر تعديلاتك غير المحفوظة. | يحجبه `gates.py` (وبخطّاف Claude Code يصير الحجب إلزامياً: يسألك أنت لا الوكيل)؛ يقترح الملفات المحددة والرسالة وينتظر موافقتك الصريحة. |
 
 ---
 
@@ -120,12 +120,16 @@ python install.py
 python install.py --project /path/to/your/project
 ```
 
-يقوم السكربت بنسخ `SKILL.md` والبوابات الكودية `gates.py` معاً في مسار المهارات لديك، ليتعرّف عليها المحرر فوراً ويستدعيها الوكيل عند المهام الهندسية.
+يقوم السكربت بنسخ `SKILL.md` والبوابات (`gates.py` و`jobs.py` و`hook_pretooluse.py`) معاً في مسار المهارات.
+المسارات: عام `~/.gemini/config/skills/engineering-os` (Antigravity/Gemini) • `--project DIR` ⇒ `DIR/.agents/skills/...` •
+**Claude Code:** `python install.py --claude` (عام: `~/.claude/skills/...`) أو `--claude --project DIR` (`DIR/.claude/skills/...`) — ويطبع لك مقطع الخطّاف لـ`settings.json`.
+
+> `jobs.py` (المهام الخلفية) يعمل على Linux/macOS فقط؛ `gates.py` والبقية محمولة.
 
 ### فحص سلامة التثبيت:
 ```bash
 python gates_selftest.py   # فحص ذاتي للبوابات (16/16 ✓)
-python test_hardening.py   # اختبارات التحصين والمهام الخلفية (21 اختباراً)
+python test_hardening.py   # اختبارات التحصين والمهام الخلفية (28 اختباراً)
 ```
 
 > **المتطلبات:** بيئة `Python 3` قياسية فقط (بدون أي مكتبات خارجية `Zero Dependencies`).
@@ -158,7 +162,7 @@ AGL/
 ├── SKILL.md               ← العقل والمنهجية الهندسية الكاملة (تفعّله المحررات)
 ├── gates.py               ← البوابات الكودية + واجهة سطر الأوامر (CLI)
 ├── gates_selftest.py      ← الاختبارات الذاتية الشاملة للبوابات (16 فحصاً)
-├── test_hardening.py      ← اختبارات التحصين: ثغرات git/verify/stop/ملفات + المهام الخلفية (21 اختباراً)
+├── test_hardening.py      ← اختبارات التحصين: ثغرات git/verify/stop/ملفات + المهام الخلفية (28 اختباراً)
 ├── jobs.py                ← مهام خلفية: أطلق أمراً طويلاً وواصل العمل، ثم wait/result بدليل طازج
 ├── hook_pretooluse.py     ← خطّاف Claude Code يفرض البوابات ويسأل المستخدم الفعلي (فرض لا طوعي)
 ├── install.py             ← سكربت تثبيت المهارة مع بواباتها بنقرة واحدة
@@ -193,10 +197,12 @@ AGL/
 5. **Single-Bias Blindness:** Overly optimistic or lazy solutions.
    - *Fix:* **The Council of Six** (Builder, Red Critic, Guard, User Voice, Historian, Ambitious) stress-testing major decisions.
 6. **Destructive Environment Actions:** Accidental resets, overwriting user changes, or blind git pushes.
-   - *Fix:* File Exclusivity + `git_guard`.
+   - *Fix:* File Exclusivity (register-before-create) + `git_guard` / `shell_guard`; in Claude Code the `hook_pretooluse.py` hook makes it enforced (asks the *user*, not the agent).
 
 ```bash
 git clone https://github.com/anr466/AGL.git && cd AGL
-python install.py                  # Installs skill + gates
+python install.py                  # Installs skill + gates + jobs + hook (add --claude for Claude Code)
 python gates_selftest.py           # 16/16 checks pass
+python test_hardening.py           # 28 hardening + background-jobs tests
+python jobs.py start "pytest -q"   # background job: returns an id immediately (Linux/macOS)
 ```

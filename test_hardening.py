@@ -199,5 +199,68 @@ class Jobs(unittest.TestCase):
         self.assertIn('timeout', self.j('status', k).stdout)
 
 
+def read_skill():
+    with open(os.path.join(HERE, 'SKILL.md'), encoding='utf-8') as f:
+        return f.read()
+
+
+class Install(unittest.TestCase):
+    def run_install(self, *a):
+        home = tempfile.mkdtemp()
+        r = subprocess.run([sys.executable, os.path.join(HERE, 'install.py'), *a], capture_output=True,
+                           text=True, env={**os.environ, 'HOME': home})
+        return r, home
+
+    def test_claude_project_and_hook_snippet(self):
+        proj = tempfile.mkdtemp()
+        r, _ = self.run_install('--claude', '--project', proj)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        d = os.path.join(proj, '.claude', 'skills', 'engineering-os')
+        for f in ('SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py'):
+            self.assertTrue(os.path.exists(os.path.join(d, f)), f)
+        snippet = json.loads(r.stdout[r.stdout.index('{'):])
+        self.assertTrue(snippet['hooks']['PreToolUse'][0]['hooks'][0]['command'].endswith('hook_pretooluse.py'))
+
+    def test_claude_global_and_default_unchanged(self):
+        r, home = self.run_install('--claude')
+        self.assertTrue(os.path.exists(os.path.join(home, '.claude', 'skills', 'engineering-os', 'SKILL.md')))
+        r, home = self.run_install()
+        self.assertTrue(os.path.exists(os.path.join(home, '.gemini', 'config', 'skills', 'engineering-os', 'gates.py')))
+
+    def test_claude_with_target_rejected(self):
+        r, _ = self.run_install('--claude', '--target', tempfile.mkdtemp())
+        self.assertNotEqual(r.returncode, 0)
+
+
+class SkillAndPolicyConsistency(unittest.TestCase):
+    """يمنع تراجع التناسق بين الوثائق والكود."""
+
+    def test_skill_version_matches_title(self):
+        s = read_skill()
+        import re
+        v = re.search(r'^version: "([\d.]+)"', s, re.M).group(1)
+        self.assertIn(f'ENGINEERING OS v{v}', s)
+
+    def test_every_cli_command_documented_in_skill(self):
+        s = read_skill()
+        for c in ('verify', 'classify', 'git', 'shell', 'files', 'stop'):
+            self.assertIn(f'| `{c}', s, c)
+
+    def test_skill_cleanup_rule_matches_enforcement(self):
+        # القاعدة النصية يجب أن تذكر شرط التسجيل المسبق الذي يفرضه الكود
+        s = read_skill()
+        self.assertIn('files register', s)
+
+    def test_agent_workflow_register_create_delete(self):  # ما تأمر به SKILL.md فعلاً ينجح
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, 'scratch', 't.txt')
+        g = lambda *a: subprocess.run([sys.executable, os.path.join(HERE, 'gates.py'), *a],
+                                      capture_output=True, text=True, env=os.environ).returncode
+        self.assertEqual(g('files', 'register', p), 0)
+        os.makedirs(os.path.dirname(p))
+        open(p, 'w').close()
+        self.assertEqual(g('shell', f'rm {p}'), 0)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)
