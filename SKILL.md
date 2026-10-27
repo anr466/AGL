@@ -2,7 +2,7 @@
 name: engineering-os
 description: نظام التشغيل الهندسي — منهجية للمهام الهندسية غير البسيطة (بناء، تعديل، تصحيح، قرار معماري، مشروع غريب). استخدمها عند تنفيذ ميزة أو إصلاح عطل أو مراجعة معمارية أو الحاجة لمجلس قرار أو حلقة تحقق أو حوكمة ذاكرة وgit. لا تستخدمها للأسئلة العابرة أو تعديل سطر تافه. Engineering methodology - truth-first, council review, verified loops, memory and git governance.
 version: "2.2"
-license: Apache-2.0
+license: MIT
 ---
 
 # ENGINEERING OS v2.2 — نظام التشغيل الهندسي
