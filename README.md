@@ -56,31 +56,23 @@ AGL هو **عقل وكيل ذكاء اصطناعي** — قوانين، أنما
 
 ## 📥 التركيب
 
-### للوكيل الفردي (ملف واحد)
-انسخ `SKILL.md` إلى مجلد مهارات وكيلك:
-- Claude Code: `.claude/skills/engineering-os/SKILL.md`
-- Cursor: `.cursor/rules/engineering-os.mdc`
-- Antigravity: `~/.gemini/config/skills/engineering-os/SKILL.md` (عام) أو `.agents/skills/engineering-os/SKILL.md` (للمشروع)
-- أي وكيل يدعم system prompt
+```bash
+python install.py                  # عام: ~/.gemini/config/skills/engineering-os
+python install.py --project DIR    # لمشروع: DIR/.agents/skills/engineering-os
+```
 
-### للمشاريع (الحزمة الكاملة)
-انسخ المجلد كاملاً واستورد الملفات حسب حاجتك:
-- `gates.py` — بوابات كودية تفرض القوانين
-- `gates_selftest.py` — اختبار البوابات
-- `brain_score.py` — مقياس أداء العقل (تقييم ذاتي يُراجع بأدلة)
-- `BRAIN_TEST.md` — حقل اختبار سلوكي
+يثبّت `SKILL.md` مع `gates.py` و`brain_score.py` و`BRAIN_TEST.md` في مجلد واحد، فيجد الوكيل البوابات بجانب المهارة. لا تُبقِ نسختين بنفس الاسم بإصدارين مختلفين.
 
----
+> نسخ `SKILL.md` وحده ممكن، لكن البوابات الكودية لن تتوفر؛ تبقى القواعد نصية فقط.
 
 ## 🧪 الاختبار
 
 ```bash
-# اختبار البوابات الخمس
-python3 gates_selftest.py  # 10/10
+python gates_selftest.py   # 16/16 — يعمل أيضاً في CI عند كل push
+python gates.py git "git push"   # مثال: يرفض برمز خروج 1
 ```
 
 ---
-
 ## 🏛️ الفلسفة
 
 ```
@@ -102,13 +94,13 @@ AGL/
 ├── README.md              ← هذا الملف
 ├── SKILL.md               ← العقل الكامل
 ├── LICENSE                ← Apache-2.0
-├── gates.py               ← بوابات إجبارية (verify/stop/exclusivity/unit/classify)
-├── gates_selftest.py      ← اختبار ذاتي للبوابات
-├── brain_score.py         ← مقياس أداء العقل (10 محاور)
-├── BRAIN_TEST.md          ← حقل اختبار سلوكي حي
-├── logo/agl_logo.png      ← الشعار (واحد موحد)
-└── docs/
-    └── editorial-dark-design.md ← نظام التصميم التحريري الداكن
+├── gates.py               ← بوابات كودية + CLI (verify/stop/classify/git + exclusivity/unit)
+├── gates_selftest.py      ← اختبار ذاتي (16 فحصاً)
+├── install.py             ← تثبيت المهارة مع بواباتها
+├── brain_score.py         ← مقياس أداء العقل (10 محاور، تقييم ذاتي)
+├── BRAIN_TEST.md          ← الاختبارات الستة + قالب التقييم
+├── .github/workflows/selftest.yml ← CI
+└── logo/agl_logo.png      ← الشعار
 ```
 
 ---

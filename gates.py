@@ -112,3 +112,106 @@ def classify_failure(kind, where, what):
     if kind not in FAILURE_TYPES:
         raise GateViolation(f'تصنيف فشل غير معروف «{kind}» — المسموح: {", ".join(FAILURE_TYPES)}')
     return {'type': kind, 'protocol': FAILURE_TYPES[kind], 'where': where[:80], 'what': what[:120]}
+
+
+# ═══ بوابة 6: حارس git (لا كتابة على التاريخ بلا موافقة المستخدم) ═══
+
+import shlex
+
+_GIT_HISTORY_WRITERS = {'commit', 'push', 'rebase', 'merge', 'cherry-pick', 'revert', 'tag', 'am', 'stash'}
+
+
+def git_guard(command, approved=False):
+    """يفحص أمر git قبل تنفيذه. approved=True فقط إن وافق المستخدم صراحة على هذا الأمر.
+    القراءة (status/log/diff/show/branch) مسموحة. الكتابة على التاريخ أو الأوامر المدمرة تحتاج موافقة.
+    ترمي GateViolation عند الرفض، وترجع True عند السماح."""
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        raise GateViolation(f'أمر غير مفهوم: {command}')
+    if not parts or parts[0] != 'git':
+        return True
+    sub = next((p for p in parts[1:] if not p.startswith('-') and '=' not in p), '')
+    flags = set(parts[1:])
+    reasons = []
+    if sub in _GIT_HISTORY_WRITERS:
+        reasons.append(f'git {sub} يكتب على التاريخ')
+    if sub == 'reset' and '--hard' in flags:
+        reasons.append('reset --hard مدمر')
+    if sub == 'clean':
+        reasons.append('clean يحذف ملفات غير متتبعة')
+    if sub == 'checkout' and '--' in parts:
+        reasons.append('checkout -- يتجاهل تعديلات غير محفوظة')
+    if sub == 'branch' and ('-D' in flags or '-d' in flags):
+        reasons.append('حذف فرع')
+    if flags & {'--force', '-f', '--force-with-lease', '--no-verify'}:
+        reasons.append('خيار قسري/تجاوز الفحوص')
+    if sub == 'add' and flags & {'-A', '--all', '.'}:
+        reasons.append('add أعمى — حدّد الملفات')
+    if reasons and not approved:
+        raise GateViolation('حارس git رفض: ' + '؛ '.join(reasons) + ' — يلزم طلب/موافقة صريحة من المستخدم.')
+    return True
+
+
+# ═══ واجهة سطر الأوامر: python gates.py <أمر> ═══
+
+def _cli(argv=None):
+    import argparse, json, os, sys
+    for s in (sys.stdout, sys.stderr):
+        if hasattr(s, 'reconfigure'):
+            s.reconfigure(encoding='utf-8')
+    ap = argparse.ArgumentParser(prog='gates.py', description='بوابات engineering-os')
+    sp = ap.add_subparsers(dest='cmd', required=True)
+
+    v = sp.add_parser('verify', help='التحقق الكافي: أدلة القراءة العكسية الأربعة')
+    v.add_argument('--label', required=True)
+    v.add_argument('--expected', type=int, required=True)
+    v.add_argument('--actual', type=int, required=True)
+    v.add_argument('--stored', default='')
+    v.add_argument('--visible', default='')
+    v.add_argument('--timestamp', default='')
+
+    c = sp.add_parser('classify', help='تصنيف فشل: افتراض|تنفيذ|فهم|بيئة')
+    c.add_argument('kind'); c.add_argument('where'); c.add_argument('what')
+
+    g = sp.add_parser('git', help='فحص أمر git قبل تنفيذه')
+    g.add_argument('command'); g.add_argument('--approved', action='store_true')
+
+    s = sp.add_parser('stop', help='تسجيل مسار فاشل (حالة في ملف json)')
+    s.add_argument('--state', default='.gates_stop.json')
+    s.add_argument('--sig', required=True); s.add_argument('--err', default='')
+    s.add_argument('--reset', action='store_true')
+
+    a = ap.parse_args(argv)
+    try:
+        if a.cmd == 'verify':
+            ev = {'stored': a.stored, 'visible': a.visible, 'timestamp': a.timestamp}
+            r = verify_readback(a.expected, lambda: (a.actual, ev), a.label)
+            print(json.dumps(r['checks'], ensure_ascii=False))
+        elif a.cmd == 'classify':
+            print(json.dumps(classify_failure(a.kind, a.where, a.what), ensure_ascii=False))
+        elif a.cmd == 'git':
+            git_guard(a.command, a.approved)
+            print('مسموح')
+        elif a.cmd == 'stop':
+            if a.reset and os.path.exists(a.state):
+                os.remove(a.state)
+            st = StopRule()
+            if os.path.exists(a.state):
+                st.tried = [tuple(x) for x in json.load(open(a.state, encoding='utf-8'))]
+            if not st.can_retry(a.sig):
+                raise GateViolation(f'المسار «{a.sig}» جُرّب سابقاً — غيّر الطريقة فعلاً.')
+            try:
+                st.record_failure(a.sig, a.err)
+            finally:
+                json.dump(st.tried, open(a.state, 'w', encoding='utf-8'), ensure_ascii=False)
+            print(f'مسارات مختلفة فاشلة: {len({x for x, _ in st.tried})}/{st.max}')
+    except GateViolation as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(_cli())

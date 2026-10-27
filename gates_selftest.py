@@ -3,7 +3,7 @@
 
 import sys
 from gates import (GateViolation, verify_readback, StopRule, FileExclusivity,
-                   unit_before_batch, classify_failure, FAILURE_TYPES)
+                   unit_before_batch, classify_failure, FAILURE_TYPES, git_guard, _cli)
 
 results = []
 
@@ -89,6 +89,34 @@ def classify():
 
 check('classify: أربعة أنواع ورفض المجهول', classify)
 
+
+# 6 git_guard
+def git_read_ok():
+    for c in ('git status', 'git log -5 --oneline', 'git diff', 'git -c user.name=x status'):
+        assert git_guard(c)
+
+
+def git_write_blocked():
+    for c in ('git commit -m x', 'git push origin main', 'git reset --hard HEAD~1', 'git clean -fd',
+              'git checkout -- f.txt', 'git add -A', 'git add .', 'git push --force', 'git commit --no-verify',
+              'git -c user.name=x commit -m y', 'git rebase main', 'git branch -D x'):
+        raises(lambda c=c: git_guard(c))
+
+
+def git_approved():
+    assert git_guard('git commit -m x', approved=True)
+    assert git_guard('git add README.md')
+
+
+check('git: القراءة مسموحة', git_read_ok)
+check('git: الكتابة/المدمر مرفوض', git_write_blocked)
+check('git: الموافقة تسمح', git_approved)
+
+# 7 CLI
+check('cli: git يرفض برمز 1', lambda: (_ for _ in ()).throw(AssertionError()) if _cli(['git', 'git push']) != 1 else None)
+check('cli: verify ينجح برمز 0', lambda: (_ for _ in ()).throw(AssertionError()) if _cli(
+    ['verify', '--label', 't', '--expected', '2', '--actual', '2', '--stored', 'v', '--visible', 'y', '--timestamp', 'now']) != 0 else None)
+check('cli: classify يرفض المجهول', lambda: (_ for _ in ()).throw(AssertionError()) if _cli(['classify', 'x', 'w', 'w']) != 1 else None)
 passed = sum(1 for _, ok, _ in results if ok)
 for name, ok, err in results:
     print(('✓ ' if ok else '✗ ') + name + (f'  {err}' if err else ''))

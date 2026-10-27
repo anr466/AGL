@@ -72,11 +72,14 @@ AXES = {
 
 def score_session(session_evidence: dict) -> dict:
     """يقيّم جلسة عمل حية بالأدلة.
-    session_evidence: قاموس كل محور يحتوي قائمة أدلة من الجلسة الفعلية."""
+    session_evidence: قاموس كل محور يحتوي قائمة أدلة من الجلسة الفعلية (None = محور غير مُمارَس)."""
     report = {'axes': [], 'total_score': 0, 'max_score': 0, 'grade': ''}
 
     for axis_id, axis in AXES.items():
         evidence = session_evidence.get(axis_id, {})
+        if evidence is None:   # None = المحور لم يُمارَس في هذه الجلسة — يُستثنى من المجموع
+            report['axes'].append({'axis': axis['name'], 'score': 'غير مُمارَس', 'weighted': 0, 'question': axis['question'], 'evidence': []})
+            continue
         checks_passed = sum(1 for c in axis['evidence_needed'] if evidence.get(c, False))
         checks_total = len(axis['evidence_needed'])
         ratio = checks_passed / checks_total if checks_total else 0
