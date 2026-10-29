@@ -12,7 +12,7 @@ import json
 import shutil
 from pathlib import Path
 
-FILES = ['SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py', 'brain_score.py', 'BRAIN_TEST.md', 'LICENSE']
+FILES = ['SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py', 'ux_gate.py', 'brain_score.py', 'BRAIN_TEST.md', 'LICENSE']
 
 
 def main():

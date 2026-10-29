@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """مقياس أداء العقل الهندسي — يقيس السلوك لا المخرج
-يُطبق على أي جلسة عمل حية ويقيس 10 محاور تفكير بأدلة.
+يُطبق على أي جلسة عمل حية ويقيس 11 محوراً تفكير بأدلة.
 تنبيه: تقييم ذاتي — كل علامة True يجب أن تُربط بدليل قابل للفحص (أمر/مخرج/ملف)، ويُفضل أن يراجعها طرف آخر."""
 
 import json
 
-# محاور القياس العشرة — كل محور له معيار نجاح ودليل مطلوب
+# محاور القياس الأحد عشر — كل محور له معيار نجاح ودليل مطلوب
 AXES = {
     'priority': {
         'name': 'إدارة الأولويات',
@@ -61,6 +61,12 @@ AXES = {
         'evidence_needed': ['انتقائية موثقة', 'تفرد موثق', 'كل مقيّم يخدم الهدف'],
         'weight': 0.8,
     },
+    'user_eye': {
+        'name': 'عين المستخدم (تقمّص المستخدم في الاختبار)',
+        'question': 'هل كتب عقد التجربة قبل البناء؟ هل شغّل التدفق ورآه فعلاً؟ هل غطّى الحالات؟ هل حكم بصدق ولم يعلن اكتمالاً بغير ✅؟',
+        'evidence_needed': ['عقد التجربة بتوقعات مسبقة', 'التدفق شُغّل ورُئي فعلاً', 'الحالات الواجبة رُئيت', 'حكم صادق وما لم يُشاهَد معلن'],
+        'weight': 1.2,  # الكود الصحيح لا يكفي: التجربة هي ما يحكم عليه المستخدم
+    },
     'escalation': {
         'name': 'الصعود المُسبَّب (3 مسارات)',
         'question': 'هل توقف عند 3 مسارات مختلفة فشلت؟ هل صعد بالدليل الكامل؟',
@@ -80,7 +86,7 @@ def score_session(session_evidence: dict) -> dict:
         if evidence is None:   # None = المحور لم يُمارَس في هذه الجلسة — يُستثنى من المجموع
             report['axes'].append({'axis': axis['name'], 'score': 'غير مُمارَس', 'weighted': 0, 'question': axis['question'], 'evidence': []})
             continue
-        checks_passed = sum(1 for c in axis['evidence_needed'] if evidence.get(c, False))
+        checks_passed = sum(1 for c in axis['evidence_needed'] if evidence.get(c) is True)  # is True: النص 'False' ليس نجاحاً
         checks_total = len(axis['evidence_needed'])
         ratio = checks_passed / checks_total if checks_total else 0
         weighted = ratio * axis['weight']
@@ -153,6 +159,7 @@ if __name__ == '__main__':
             'تفرد موثق': True,                 # القوانين مرة واحدة
             'كل مقيّم يخدم الهدف': True,
         },
+        'user_eye': None,   # لم يُمارَس في هذه الجلسة التوضيحية
         'escalation': {
             'العدّ = 3 بالضبط': True,           # 3 مسارات مختلفة
             'التقرير شامل': True,
@@ -160,4 +167,5 @@ if __name__ == '__main__':
     }
 
     report = score_session(session)
+    report['_demo'] = 'جلسة توضيحية ثابتة — ليست قياساً حقيقياً؛ مرّر أدلة جلستك إلى score_session'
     print(json.dumps(report, ensure_ascii=False, indent=1))

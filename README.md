@@ -82,7 +82,7 @@ AGL لا يقدم مجرد نصوص تشجيعية، بل يزرع **نظام ت
 | **الباني الصارم** | الاتفاقيات والتنفيذ | «أصغر تغيير كامل يلمس كل المتأثرين — أين؟» |
 | **الناقد الأحمر** | مهاجمة الخطة وهدم الافتراضات | «كيف يفشل هذا؟ ماذا لم يفكر فيه أحد؟» |
 | **الحارس** | الأمان وحدود الثقة | «ماذا لو كان المدخل خبيثاً؟ ماذا لو تخطينا التحقق؟» |
-| **صوت المستخدم** | الإنتاج والتجربة الحقيقية | «هل يشتغل بيد مستخدم حقيقي في الإنتاج الآن؟» |
+| **صوت المستخدم** | الإنتاج والتجربة الحقيقية | «من هو وماذا يريد وماذا يرى؟ هل يشتغل بيده الآن؟» |
 | **المؤرخ** | الذاكرة ومنع التكرار | «هل هذا موثق؟ هل يعيد اختراع موجود؟ هل الخريطة تطابق الواقع؟» |
 | **الطموح** | الحلول الذكية المبتكرة | «هل توجد طريقة أذكى؟ (يحدّه الناقد من التضخم)» |
 
@@ -91,6 +91,16 @@ AGL ليس بيروقراطية ثقيلة؛ المنهجية تتكيف ذات�
 - **سؤال أو تعديل تافه:** حلقة القراءة والتنفيذ فقط (لا مجلس ولا تعقيد).
 - **ميزة أو إصلاح عادي:** قراءة ➔ فهم ➔ تصميم ➔ تنفيذ ➔ تحقق بجذر المشكلة.
 - **مشروع كبير / قرار معماري / تعثر:** كامل الحلقات + انعقاد المجلس + فحص البوابات.
+- **أي سطح يراه المستخدم (واجهة، CLI، API، مستند):** يضاف إليها عين المستخدم (القسم التالي) بحجم الأثر.
+
+### 7. عين المستخدم: الكود الصحيح ≠ التجربة الصحيحة
+الاختبارات الكودية قد تنجح كلها بينما الزر مغطّى بطبقة شفافة أو رسالة الخطأ خضراء. لذا يتقمّص العقل **شخصية المستخدم** في الاختبار نفسه (`SKILL.md` القسم 3-ب):
+- **عقد التجربة قبل البناء:** من هو المستخدم، هدفه، سياقه (جهاز/لغة/عجلة)، معاييره بلسانه، رحلاته (P0)، والحالات الواجب رؤيتها (أولى/نجاح/فراغ/خطأ/تحميل) — مع **توقع مكتوب قبل التنفيذ** لا يُعدَّل بعد رؤية النتيجة.
+- **سطح حسب نوع المشروع:** ويب/تطبيق (لقطات جوال وسطح مكتب) • CLI (النص الكامل) • API (رحلة استدعاءات) • مستند (صيّره وانظر الصفحة) • حوار.
+- **عشرة محاور:** اكتمال التدفق، سلامة العرض (بما يراه المستخدم لا بنافذة التخطيط؛ وفي RTL يمتد الفيض يساراً)، المقروئية، ردّ الفعل وزمنه، الأحجام، الوصول، اللغة والاتجاه، السرعة، الأخطاء الخفية، مطابقة النية.
+- **ثلاث طبقات أدلة:** موضوعية تُحسب آلياً + حكم إدراكي بعد **رؤية** اللقطة فعلاً + مراجع مستقل للرحلات الحرجة.
+- **حكم صادق بثلاث نتائج:** ✅ / ❌ / ⚠️ غير مكتمل — ولا «اكتمل» بغير ✅، وما لا يغطيه الفحص (لمس حقيقي، قارئ شاشة، أجهزة فعلية…) يُعلن.
+- الذراع التنفيذية الاختيارية: `ux_gate.py` (عقد ← لقطات وأدلة ← `judge` ← `gate`).
 
 ---
 
@@ -103,6 +113,7 @@ AGL ليس بيروقراطية ثقيلة؛ المنهجية تتكيف ذات�
 | **خطأ في كود مستدعى** | يضع `try/except: pass` أو يسكّت الخطأ في الواجهة. | يصنّف الخطأ، ويصلح الجذر في الدالة المشتركة لجميع المتأثرين. |
 | **مشروع جديد غريب** | يقفز لتعديل الكود متخيلاً أسماء دوال ومكتبات. | يقرأ نقاط الدخول وتدفق البيانات ويكتب تصنيف معرفته قبل لمس أي ملف. |
 | **القرارات المعمارية** | يختار أول حل يتبادر لذهنه وغالباً ما يكون هشاً. | يمرر الفكرة على مجلس الستة، يهاجمها نقدياً، ويوثق القرار وبديله المرفوض. |
+| **واجهة / تجربة** | يختبر الدوال ويقول «يعمل» بينما الزر مغطّى بطبقة شفافة أو رسالة الخطأ خضراء. | يتقمّص المستخدم: يشغّل التدفق ويرى اللقطة ويسجّل توقعه مسبقاً ثم يعلن ✅/❌/⚠️ وما لم يُشاهَد. |
 | **حفظ التغييرات** | ينفّذ `git add -A && git push --force` ويدمر تعديلاتك غير المحفوظة. | يحجبه `gates.py` (وبخطّاف Claude Code يصير الحجب إلزامياً: يسألك أنت لا الوكيل)؛ يقترح الملفات المحددة والرسالة وينتظر موافقتك الصريحة. |
 
 ---
@@ -120,7 +131,7 @@ python install.py
 python install.py --project /path/to/your/project
 ```
 
-يقوم السكربت بنسخ `SKILL.md` والبوابات (`gates.py` و`jobs.py` و`hook_pretooluse.py`) معاً في مسار المهارات.
+يقوم السكربت بنسخ `SKILL.md` والبوابات (`gates.py` و`jobs.py` و`hook_pretooluse.py` و`ux_gate.py`) معاً في مسار المهارات.
 المسارات: عام `~/.gemini/config/skills/engineering-os` (Antigravity/Gemini) • `--project DIR` ⇒ `DIR/.agents/skills/...` •
 **Claude Code:** `python install.py --claude` (عام: `~/.claude/skills/...`) أو `--claude --project DIR` (`DIR/.claude/skills/...`) — ويطبع لك مقطع الخطّاف لـ`settings.json`.
 
@@ -130,6 +141,7 @@ python install.py --project /path/to/your/project
 ```bash
 python gates_selftest.py   # فحص ذاتي للبوابات (16/16 ✓)
 python test_hardening.py   # اختبارات التحصين والمهام الخلفية (28 اختباراً)
+python test_ux_gate.py     # بوابة عين المستخدم وتكاملها مع مقياس العقل (26 اختباراً؛ اختبارات المتصفح تُتخطّى إن غاب Playwright)
 ```
 
 > **المتطلبات:** بيئة `Python 3` قياسية فقط (بدون أي مكتبات خارجية `Zero Dependencies`).
@@ -163,11 +175,13 @@ AGL/
 ├── gates.py               ← البوابات الكودية + واجهة سطر الأوامر (CLI)
 ├── gates_selftest.py      ← الاختبارات الذاتية الشاملة للبوابات (16 فحصاً)
 ├── test_hardening.py      ← اختبارات التحصين: ثغرات git/verify/stop/ملفات + المهام الخلفية (28 اختباراً)
+├── ux_gate.py             ← بوابة عين المستخدم: عقد التجربة، لقطات، أدلة موضوعية، حكم إدراكي، بوابة PASS/FAIL/INCOMPLETE
+├── test_ux_gate.py        ← اختبارات عين المستخدم + تكاملها مع المهارة ومقياس العقل (26 اختباراً)
 ├── jobs.py                ← مهام خلفية: أطلق أمراً طويلاً وواصل العمل، ثم wait/result بدليل طازج
 ├── hook_pretooluse.py     ← خطّاف Claude Code يفرض البوابات ويسأل المستخدم الفعلي (فرض لا طوعي)
 ├── install.py             ← سكربت تثبيت المهارة مع بواباتها بنقرة واحدة
-├── BRAIN_TEST.md          ← حقل اختبار سلوك وتفكير الوكيل + قالب التقييم
-├── brain_score.py         ← مقياس أداء رقمي يقيس سلوك الوكيل بالأدلة
+├── BRAIN_TEST.md          ← حقل اختبار سلوك وتفكير الوكيل (7 اختبارات) + قالب التقييم
+├── brain_score.py         ← مقياس أداء رقمي يقيس سلوك الوكيل بالأدلة (11 محوراً، بوليان صارمة)
 ├── logo/agl_logo.png      ← الشعار الموحد
 └── .github/workflows/     ← أتمتة الاختبارات والتكامل المستمر (CI)
 ```
@@ -198,11 +212,14 @@ AGL/
    - *Fix:* **The Council of Six** (Builder, Red Critic, Guard, User Voice, Historian, Ambitious) stress-testing major decisions.
 6. **Destructive Environment Actions:** Accidental resets, overwriting user changes, or blind git pushes.
    - *Fix:* File Exclusivity (register-before-create) + `git_guard` / `shell_guard`; in Claude Code the `hook_pretooluse.py` hook makes it enforced (asks the *user*, not the agent).
+7. **Passing Code ≠ Passing Experience:** Unit tests green while the button is covered by an invisible layer or the error message is styled as success.
+   - *Fix:* **User-Eye Protocol** (SKILL §3-B): experience contract written *before* building (persona, journeys, states, pre-registered expectations), the agent embodies the user, runs the real flow, *looks* at the result, and reports an honest ✅/❌/⚠️ (never "done" without ✅). Objective probes (real clickability, contrast, overflow as the user sees it incl. RTL, feedback latency, console errors) + perceptual judgment + independent review for critical journeys.
 
 ```bash
 git clone https://github.com/anr466/AGL.git && cd AGL
 python install.py                  # Installs skill + gates + jobs + hook (add --claude for Claude Code)
 python gates_selftest.py           # 16/16 checks pass
 python test_hardening.py           # 28 hardening + background-jobs tests
+python test_ux_gate.py             # 26 user-eye tests (browser tests skip without Playwright)
 python jobs.py start "pytest -q"   # background job: returns an id immediately (Linux/macOS)
 ```
