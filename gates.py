@@ -32,6 +32,10 @@ class SimilarPath(GateViolation):
     """المسار الجديد يشبه مساراً سابقاً — يلزم توضيح الفرق الجوهري."""
 
 
+class StopTriggered(GateViolation):
+    """بلغ عدد المسارات الفاشلة المختلفة الحد — توقف إجباري وصعود مُسبَّب."""
+
+
 # ═══ حالة المشروع (.agl/) ═══
 def project_root(start=None):
     base = os.path.abspath(start or os.getcwd())
@@ -88,7 +92,8 @@ class _Lock:
 
 # ═══ بوابة 1: التحقق الكافي ═══
 _TRUE = {'yes', 'true', '1', 'y', 'ok', 'نعم'}
-_FALSE = {'', 'no', 'false', '0', 'none', 'null', 'n', 'لا', 'nan'}
+_ABSENT = {'', 'none', 'null', 'nan', 'undefined'}          # لا قيمة مخزنة
+_FAILWORDS = {'error', 'failed', 'failure', 'exception', 'traceback', 'timeout', 'فشل', 'خطأ'}  # «القيمة» نفسها وصف فشل
 
 
 def _is_true_flag(v):
@@ -101,41 +106,59 @@ def _is_true_flag(v):
 
 
 def _has_value(v):
-    """قيمة مخزنة: أي قيمة غير فارغة وليست نفياً صريحاً."""
+    """قيمة مخزنة مقروءة من المصدر. الصفر و`false` و`no` **بيانات مشروعة** (قد تكون القيمة المخزنة فعلاً).
+    المرفوض: لا شيء، أو نص هو بذاته وصف فشل (error/failed...)."""
     if v is None:
         return False
     if isinstance(v, bool):
-        return v
-    return str(v).strip().lower() not in _FALSE
-
-
-def _valid_timestamp(v):
-    """طابع زمني حقيقي: ISO-8601 أو epoch موجب — لا نص حر مثل 'now'."""
-    if isinstance(v, bool) or v is None:
+        return True
+    t = str(v).strip().lower()
+    if t in _ABSENT or t in _FAILWORDS:
         return False
+    # رسالة خطأ تبدأ بكلمة فشل ثم نقطتين/شرطة/قوس («Error: x»)؛ أما نص يحتوي الكلمة عرَضاً فبيانات
+    return not re.match(r'(?:' + '|'.join(map(re.escape, _FAILWORDS)) + r')\s*[:\-(\[]', t)
+
+
+def _to_epoch(v):
+    """ISO-8601 أو epoch موجب → ثوانٍ؛ غير ذلك None (نص حر مثل 'now' ليس طابعاً زمنياً)."""
+    if isinstance(v, bool) or v is None:
+        return None
     if isinstance(v, (int, float)):
-        return v > 0
+        return float(v) if v > 0 else None
     s = str(v).strip()
     try:
-        return float(s) > 0
+        f = float(s)
+        return f if f > 0 else None
     except ValueError:
         pass
     try:
-        datetime.fromisoformat(s.replace('Z', '+00:00'))
-        return True
+        d = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        return d.timestamp()  # بلا منطقة زمنية = توقيت محلي، وهو ما ينتجه datetime.now()
     except ValueError:
+        return None
+
+
+def _valid_timestamp(v, max_age=None):
+    """طابع زمني حقيقي. مع max_age (ثوانٍ): يُرفض القديم والمستقبلي (>5 دقائق) — الدليل يجب أن يكون طازجاً."""
+    t = _to_epoch(v)
+    if t is None:
         return False
+    if max_age is None:
+        return True
+    now = datetime.now().timestamp()
+    return -300 <= now - t <= max_age
 
 
-def verify_readback(expected_count, readback_fn, label):
+def verify_readback(expected_count, readback_fn, label, max_age=None):
     """بوابة التحقق الكافي: قراءة عكسية من المصدر بعد كل عملية.
-    evidence_dict: stored (قيمة) / visible (علامة صريحة) / timestamp (ISO أو epoch)."""
+    evidence_dict: stored (قيمة) / visible (علامة صريحة) / timestamp (ISO أو epoch).
+    max_age: إن حُدّد (ثوانٍ) فالدليل الأقدم أو المستقبلي مرفوض (الـCLI يستعمل 3600 افتراضياً)."""
     actual, evidence = readback_fn()
     checks = {
         'العدّاد الفعلي': actual == expected_count,
         'القيمة المخزنة': _has_value(evidence.get('stored')),
         'الحالة المرئية': _is_true_flag(evidence.get('visible')),
-        'السجل الزمني': _valid_timestamp(evidence.get('timestamp')),
+        'السجل الزمني': _valid_timestamp(evidence.get('timestamp'), max_age),
     }
     failed = [k for k, v in checks.items() if not v]
     if failed:
@@ -202,7 +225,7 @@ class StopRule:
         distinct = self._distinct()
         if distinct >= self.max:
             report = '\n'.join(f'- {s}: {e}' for s, e in self.tried)
-            raise GateViolation(
+            raise StopTriggered(
                 f'قاعدة الإيقاف: {distinct} مسارات مختلفة فشلت — توقف إجباري، صعود مُسبَّب:\n{report}\n'
                 f'المطلوب من الإنسان: مراجعة المسارات أعلاه وتحديد الاتجاه.')
         warnings = []
@@ -210,6 +233,54 @@ class StopRule:
         if len(last) == 3 and len(set(last)) == 1 and last[0]:
             warnings.append('نفس رسالة الخطأ 3 مرات متتالية — غالباً الجذر لم يتغير رغم تغيّر «المسار».')
         return {'distinct': distinct, 'warnings': warnings}
+
+
+def record_attempt(sig, err='', diff=None, state=None, reset=False):
+    """يسجّل مساراً فاشلاً في .agl/stop.json (بقفل). يرمي SimilarPath/StopTriggered/GateViolation.
+    مصدر واحد للحالة يشاركه `gates.py stop` و`ux_gate.py gate --attempt`."""
+    path = state or state_path('stop.json')
+    with _Lock(path):
+        if reset and os.path.exists(path):
+            os.remove(path)
+        raw = _read_json(path, {})
+        st = StopRule()
+        st.tried = [tuple(x) for x in (raw if isinstance(raw, list) else raw.get('tried', []))]
+        st.diffs = {} if isinstance(raw, list) else raw.get('diffs', {})
+        if not st.can_retry(sig):
+            raise GateViolation(f'المسار «{sig}» جُرّب سابقاً — غيّر الطريقة فعلاً.')
+        res, err_exc = None, None
+        try:
+            res = st.record_failure(sig, err, diff)
+        except SimilarPath:
+            raise
+        except GateViolation as e:
+            err_exc = e
+        _write_json(path, {'tried': st.tried, 'diffs': st.diffs})
+        if err_exc:
+            raise err_exc
+    res['max'] = st.max
+    return res
+
+
+def ux_visible(max_age=3600):
+    """«الحالة المرئية» مشتقة من بوابة عين المستخدم لا من علم يمرّره الوكيل:
+    صحيحة فقط إن كان آخر `ux_gate.py gate` = PASS وطازجاً والأدلة لم تتغيّر بعده. يرجع (bool, سبب)."""
+    last = _read_json(state_path('ux/last_gate.json'), None)
+    if not last:
+        return False, 'لا نتيجة لبوابة عين المستخدم — شغّل ux_gate.py run ثم judge ثم gate'
+    if last.get('verdict') != 'PASS':
+        return False, f'بوابة عين المستخدم = {last.get("verdict")} (المطلوب PASS)'
+    if datetime.now().timestamp() - last.get('t', 0) > max_age:
+        return False, 'نتيجة بوابة عين المستخدم قديمة — أعد run/gate'
+    try:
+        with open(state_path('ux/evidence.json'), 'rb') as f:
+            import hashlib
+            cur = hashlib.sha1(f.read()).hexdigest()
+    except OSError:
+        return False, 'ملف الأدلة مفقود'
+    if cur != last.get('evidence_sha'):
+        return False, 'الأدلة تغيّرت بعد آخر gate — أعد gate'
+    return True, 'PASS طازج'
 
 
 # ═══ بوابة 3: حصرية الملفات ═══
@@ -229,6 +300,14 @@ def _under(p, roots):
     return any(p == c or p.startswith(c.rstrip(os.sep) + os.sep) for c in roots)
 
 
+_REGENERABLE = {'__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.hypothesis'}
+
+
+def _is_regenerable(p):
+    """كاش تولّده الأدوات وتعيد توليده: يجوز حذفه دون تسجيل مسبق ما دام غير متتبَّع في git."""
+    return os.path.basename(p.rstrip(os.sep)) in _REGENERABLE and not _is_git_tracked(p)
+
+
 class FileExclusivity:
     """ما أنشأه الوكيل هذه المهمة فقط له حق الحذف/التعديل الحُر.
     قاعدة التسجيل: سجّل المسار **قبل** إنشائه. مسار موجود مسبقاً لا يُسجَّل (وإلا لسجّل الوكيل ملفات المستخدم).
@@ -239,8 +318,11 @@ class FileExclusivity:
         self.created = set(_read_json(persist, [])) if persist else set()
 
     def _save(self):
+        """قفل + دمج مع ما كتبته عمليات أخرى (وكلاء الخلفية) — لا تضيع تسجيلات متزامنة."""
         if self.persist:
-            _write_json(self.persist, sorted(self.created))
+            with _Lock(self.persist):
+                self.created |= set(_read_json(self.persist, []))
+                _write_json(self.persist, sorted(self.created))
 
     def register_created(self, path):
         p = os.path.abspath(str(path))
@@ -255,6 +337,8 @@ class FileExclusivity:
     def allow_delete(self, path):
         raw = str(path)
         p = os.path.abspath(os.path.expanduser(raw))
+        if _is_regenerable(p):
+            return True
         if _under(p, self.created):
             if _is_git_tracked(p):
                 raise GateViolation(f'رفض «{raw}»: مسجَّل لكنه متتبَّع في git — ملف مستقر لا يُحذف.')
@@ -503,7 +587,8 @@ def _cli(argv=None):
     v.add_argument('--expected', type=int, required=True)
     v.add_argument('--actual', type=int, required=True)
     v.add_argument('--stored', default='')
-    v.add_argument('--visible', default='')
+    v.add_argument('--visible', default='', help="علم صريح yes/no، أو «ux» لاشتقاقه من بوابة عين المستخدم")
+    v.add_argument('--max-age', type=int, default=3600, help='أقصى عمر للدليل بالثواني (افتراضي 3600)')
     v.add_argument('--timestamp', default='')
     c = sp.add_parser('classify', help='تصنيف فشل: افتراض|تنفيذ|فهم|بيئة')
     c.add_argument('kind'); c.add_argument('where'); c.add_argument('what')
@@ -522,8 +607,14 @@ def _cli(argv=None):
     try:
         if a.cmd == 'verify':
             ts = datetime.now().isoformat() if a.timestamp.strip().lower() == 'now' else a.timestamp
-            ev = {'stored': a.stored, 'visible': a.visible, 'timestamp': ts}
-            r = verify_readback(a.expected, lambda: (a.actual, ev), a.label)
+            vis = a.visible
+            if vis.strip().lower() == 'ux':
+                ok_ux, why = ux_visible(a.max_age)
+                vis = 'yes' if ok_ux else 'no'
+                if not ok_ux:
+                    print('عين المستخدم: ' + why, file=sys.stderr)
+            ev = {'stored': a.stored, 'visible': vis, 'timestamp': ts}
+            r = verify_readback(a.expected, lambda: (a.actual, ev), a.label, a.max_age)
             print(json.dumps(r['checks'], ensure_ascii=False))
         elif a.cmd == 'classify':
             print(json.dumps(classify_failure(a.kind, a.where, a.what), ensure_ascii=False))
@@ -542,27 +633,8 @@ def _cli(argv=None):
                     fe.register_created(p) if a.action == 'register' else fe.allow_delete(p)
                 print('تم' if a.action == 'register' else 'مسموح')
         elif a.cmd == 'stop':
-            path = a.state or state_path('stop.json')
-            with _Lock(path):
-                if a.reset and os.path.exists(path):
-                    os.remove(path)
-                raw = _read_json(path, {})
-                st = StopRule()
-                st.tried = [tuple(x) for x in (raw if isinstance(raw, list) else raw.get('tried', []))]
-                st.diffs = {} if isinstance(raw, list) else raw.get('diffs', {})
-                if not st.can_retry(a.sig):
-                    raise GateViolation(f'المسار «{a.sig}» جُرّب سابقاً — غيّر الطريقة فعلاً.')
-                res, err = None, None
-                try:
-                    res = st.record_failure(a.sig, a.err, a.diff)
-                except SimilarPath:
-                    raise
-                except GateViolation as e:
-                    err = e
-                _write_json(path, {'tried': st.tried, 'diffs': st.diffs})
-                if err:
-                    raise err
-            print(f'مسارات مختلفة فاشلة: {res["distinct"]}/{st.max}')
+            res = record_attempt(a.sig, a.err, a.diff, a.state, a.reset)
+            print(f'مسارات مختلفة فاشلة: {res["distinct"]}/{res["max"]}')
             for w in res['warnings']:
                 print('تحذير:', w)
     except GateViolation as e:

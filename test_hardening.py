@@ -29,11 +29,23 @@ def blocked(cmd):
 
 class Verify(unittest.TestCase):
     def test_negations_no_longer_pass(self):
-        for bad in ({'stored': 'no'}, {'visible': 'false'}, {'visible': 'no'}, {'timestamp': 'now'},
-                    {'timestamp': 'abc'}, {'stored': ''}, {'visible': '0'}):
+        # visible/timestamp: النفي والغموض مرفوضان. stored: قيمة مخزنة قد تكون 0/false/no بياناتٍ مشروعة
+        for bad in ({'visible': 'false'}, {'visible': 'no'}, {'timestamp': 'now'}, {'timestamp': 'abc'},
+                    {'stored': ''}, {'stored': 'none'}, {'stored': 'Error: x'}, {'stored': 'فشل'}, {'visible': '0'}):
             ev = {**GOOD, **bad}
             with self.assertRaises(GateViolation, msg=bad):
                 gates.verify_readback(3, lambda: (3, ev), 't')
+
+    def test_falsy_stored_values_are_legitimate_data(self):
+        for ok in (0, False, '0', 'false', 'no'):
+            gates.verify_readback(3, lambda: (3, {**GOOD, 'stored': ok}), 't')
+
+    def test_stale_and_future_timestamps_rejected(self):
+        now = time.time()
+        for ts in (now - 7200, now + 3600):
+            with self.assertRaises(GateViolation, msg=ts):
+                gates.verify_readback(3, lambda: (3, {**GOOD, 'timestamp': ts}), 't', max_age=3600)
+        gates.verify_readback(3, lambda: (3, {**GOOD, 'timestamp': now - 10}), 't', max_age=3600)
 
     def test_valid_passes(self):
         self.assertTrue(all(gates.verify_readback(3, lambda: (3, GOOD), 't')['checks'].values()))
@@ -204,6 +216,90 @@ def read_skill():
         return f.read()
 
 
+class StopShared(unittest.TestCase):
+    def test_record_attempt_shared_state_and_stop(self):
+        d = tempfile.mkdtemp()
+        st = os.path.join(d, 'stop.json')
+        gates.record_attempt('alpha beta gamma', 'e1', state=st, reset=True)
+        with self.assertRaises(SimilarPath):
+            gates.record_attempt('alpha beta gamma delta', 'e2', state=st)
+        gates.record_attempt('zzz yyy', 'e2', state=st)
+        with self.assertRaises(gates.StopTriggered):
+            gates.record_attempt('qqq www', 'e3', state=st)
+        self.assertTrue(issubclass(gates.StopTriggered, GateViolation))
+
+
+class FilesRobust(unittest.TestCase):
+    def test_concurrent_registrations_are_not_lost(self):
+        d = tempfile.mkdtemp()
+        persist = os.path.join(d, 'c.json')
+        a, b = FileExclusivity(persist=persist), FileExclusivity(persist=persist)  # نسختان تحملان حالة قديمة
+        pa, pb = os.path.join(d, 'a.txt'), os.path.join(d, 'b.txt')
+        a.register_created(pa)
+        b.register_created(pb)
+        open(pa, 'w').close(); open(pb, 'w').close()
+        fresh = FileExclusivity(persist=persist)
+        self.assertTrue(fresh.allow_delete(pa))
+        self.assertTrue(fresh.allow_delete(pb))
+
+    def test_tool_caches_are_deletable_without_registration(self):
+        d = tempfile.mkdtemp()
+        c = os.path.join(d, '__pycache__')
+        os.makedirs(c)
+        self.assertTrue(FileExclusivity().allow_delete(c))
+        self.assertTrue(gates.shell_guard(f'rm -rf {c}'))
+
+    def test_data_mentioning_error_is_still_data(self):
+        gates.verify_readback(3, lambda: (3, {**GOOD, 'stored': 'error handling guide'}), 't')
+
+    def test_cache_name_does_not_shield_tracked_files(self):
+        d = tempfile.mkdtemp()
+        subprocess.run(['git', 'init', '-q'], cwd=d)
+        c = os.path.join(d, '__pycache__'); os.makedirs(c)
+        f = os.path.join(c, 'x.py'); open(f, 'w').close()
+        subprocess.run(['git', 'add', '-f', '__pycache__/x.py'], cwd=d)
+        with self.assertRaises(GateViolation):
+            FileExclusivity().allow_delete(f)
+
+
+class UxVisible(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.env = {**os.environ, 'AGL_STATE_DIR': self.d}
+        os.makedirs(os.path.join(self.d, 'ux'))
+
+    def write(self, verdict='PASS', age=0, tamper=False):
+        ev = os.path.join(self.d, 'ux', 'evidence.json')
+        import hashlib
+        with open(ev, 'w') as f:
+            f.write('[{"a":1}]')
+        with open(ev, 'rb') as f:
+            sha = hashlib.sha1(f.read()).hexdigest()
+        with open(os.path.join(self.d, 'ux', 'last_gate.json'), 'w') as f:
+            json.dump({'verdict': verdict, 't': time.time() - age, 'evidence_sha': sha}, f)
+        if tamper:
+            with open(ev, 'w') as f:
+                f.write('[{"a":2}]')
+
+    def verify(self):
+        r = subprocess.run([sys.executable, os.path.join(HERE, 'gates.py'), 'verify', '--label', 't', '--expected', '3',
+                            '--actual', '3', '--stored', 'v', '--visible', 'ux', '--timestamp', time.strftime('%Y-%m-%dT%H:%M:%S')],
+                           capture_output=True, text=True, env=self.env)
+        return r.returncode
+
+    def test_pass_fresh_accepted(self):
+        self.write()
+        self.assertEqual(self.verify(), 0)
+
+    def test_not_pass_stale_or_changed_evidence_rejected(self):
+        for kw in ({'verdict': 'INCOMPLETE'}, {'verdict': 'FAIL'}, {'age': 7200}, {'tamper': True}):
+            self.write(**kw)
+            self.assertEqual(self.verify(), 1, kw)
+
+    def test_missing_gate_rejected(self):
+        self.assertEqual(self.verify(), 1)
+
+
 class Install(unittest.TestCase):
     def run_install(self, *a):
         home = tempfile.mkdtemp()
@@ -216,7 +312,8 @@ class Install(unittest.TestCase):
         r, _ = self.run_install('--claude', '--project', proj)
         self.assertEqual(r.returncode, 0, r.stderr)
         d = os.path.join(proj, '.claude', 'skills', 'engineering-os')
-        for f in ('SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py'):
+        for f in ('SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py', 'ux_gate.py', 'recon.py', 'BRAIN_TEST.md',
+                  'references/gates.md', 'references/user-eye.md', 'references/recon.md'):
             self.assertTrue(os.path.exists(os.path.join(d, f)), f)
         snippet = json.loads(r.stdout[r.stdout.index('{'):])
         self.assertTrue(snippet['hooks']['PreToolUse'][0]['hooks'][0]['command'].endswith('hook_pretooluse.py'))
@@ -241,10 +338,14 @@ class SkillAndPolicyConsistency(unittest.TestCase):
         v = re.search(r'^version: "([\d.]+)"', s, re.M).group(1)
         self.assertIn(f'ENGINEERING OS v{v}', s)
 
-    def test_every_cli_command_documented_in_skill(self):
-        s = read_skill()
+    def test_every_cli_command_documented_in_reference(self):
+        with open(os.path.join(HERE, 'references', 'gates.md'), encoding='utf-8') as f:
+            ref = f.read()
         for c in ('verify', 'classify', 'git', 'shell', 'files', 'stop'):
-            self.assertIn(f'| `{c}', s, c)
+            self.assertIn(f'| `{c}', ref, c)
+        for c in ('start', 'wait', 'cancel'):
+            self.assertIn(c, ref, c)
+        self.assertIn('references/', read_skill())
 
     def test_skill_cleanup_rule_matches_enforcement(self):
         # القاعدة النصية يجب أن تذكر شرط التسجيل المسبق الذي يفرضه الكود

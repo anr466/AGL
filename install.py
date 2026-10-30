@@ -12,7 +12,8 @@ import json
 import shutil
 from pathlib import Path
 
-FILES = ['SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py', 'ux_gate.py', 'brain_score.py', 'BRAIN_TEST.md', 'LICENSE']
+FILES = ['SKILL.md', 'gates.py', 'jobs.py', 'hook_pretooluse.py', 'ux_gate.py', 'recon.py', 'brain_score.py', 'BRAIN_TEST.md', 'LICENSE']
+DIRS = ['references']
 
 
 def main():
@@ -36,6 +37,8 @@ def main():
     dest.mkdir(parents=True, exist_ok=True)
     for f in FILES:
         shutil.copy2(src / f, dest / f)
+    for d in DIRS:
+        shutil.copytree(src / d, dest / d, dirs_exist_ok=True)
     print(f'تم التثبيت في: {dest}')
     print('تنبيه: لا تُبقِ نسختين بنفس الاسم (عامة + مشروع) بإصدارين مختلفين.')
     print('نصيحة: أضف .agl/ إلى .gitignore في مشروعك (حالة البوابات والمهام الخلفية).')

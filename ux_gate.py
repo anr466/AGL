@@ -2,7 +2,9 @@
 """ux_gate.py — بوابة «عين المستخدم»: التحقق مما يراه المستخدم لا مما يُنفَّذ في الكود.
 
 الدورة:  contract (قبل البناء) ← run (أدلة موضوعية + لقطات) ← judge (حكم إدراكي بتقمّص المستخدم) ← gate.
-النتائج:  PASS (0) | FAIL (1) | INCOMPLETE (2) | لا أداة تشغيل (3).  لا يُعلَن «اكتمل» إلا عند PASS.
+النتائج:  PASS (0) | FAIL (1) | INCOMPLETE (2) | لا أداة تشغيل (3) | توقف إجباري بعد 3 مسارات فاشلة (4).  لا يُعلَن «اكتمل» إلا عند PASS.
+جسر النية: العقد يُشتق من طلب المستخدم الحرفي (request_parts) وكل معيار يُربط باقتباس أو استنتاج معلن أو سؤال؛ وقفل العقد
+عند أول تشغيل يكشف أي تخفيف للتوقعات بعد رؤية النتائج.
 
 صدق القياس:
 - الأدلة الموضوعية (قابلية النقر، التغطية، التباين، الفيض، ردّ الفعل، الأخطاء) تُحسب آلياً ولا يحكم الوكيل فيها.
@@ -11,6 +13,7 @@
 - ما لا تغطيه الأداة (لمس حقيقي، قارئ شاشة، أجهزة فعلية، شبكة بطيئة) يُسرد في التقرير ولا يُعدّ مختبَراً."""
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -20,7 +23,7 @@ import time
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from gates import state_path, _read_json, _write_json  # noqa: E402
+from gates import GateViolation, StopTriggered, record_attempt, state_path, _read_json, _write_json  # noqa: E402
 
 SEV_W = {'blocker': 40, 'major': 15, 'minor': 5}
 DEFAULT_VIEWPORTS = [{'name': 'mobile', 'width': 375, 'height': 667}, {'name': 'desktop', 'width': 1280, 'height': 800}]
@@ -44,6 +47,125 @@ NOT_COVERED = ['اللمس الحقيقي على جهاز فعلي', 'قارئ �
                'متصفحات غير Chromium', 'محتوى حي (بيانات إنتاج حقيقية)']
 
 # ───────────────────────── العقد ─────────────────────────
+
+
+ACTION_KEYS = ('click', 'fill', 'press', 'select', 'cmd')
+
+
+_STOP = {'أريد', 'اريد', 'أن', 'ان', 'أنا', 'من', 'إلى', 'الى', 'على', 'في', 'مع', 'هذا', 'هذه', 'لكن', 'أو', 'ثم', 'كي', 'لكي',
+         'want', 'the', 'and', 'for', 'with', 'that', 'this', 'can', 'would', 'like'}
+
+
+def _cw(s):
+    """كلمات المحتوى (بلا كلمات الربط ولا حرف العطف «و» الملتصق) لفحص تغطية الطلب."""
+    out = set()
+    for w in re.findall(r'[\w\u0600-\u06FF]{3,}', (s or '').lower()):
+        if len(w) > 3 and w[0] == 'و':
+            w = w[1:]
+        if w not in _STOP:
+            out.add(w)
+    return out
+
+
+def _intent_errors(c):
+    """جسر النية: العقد مشتق من الطلب الحرفي لا من تخمين. فحص آلي للتتبّع لا للفهم الدلالي —
+    مراجعة الأجزاء والمعايير تبقى حكماً بشرياً/مستقلاً."""
+    req = _norm(c.get('request', ''))
+    if len(req) < 10:
+        return ['request ناقص: انسخ طلب المستخدم حرفياً (≥10 أحرف) — العقد يُشتق منه لا من تخمينك']
+    errs, parts = [], c.get('request_parts') or []
+    if not parts:
+        errs.append('request_parts فارغة: فكّك الطلب إلى أجزاء حرفية (كل جزء اقتباس من الطلب)')
+    covered = set()
+    for p in parts:
+        if _norm(p) not in req:
+            errs.append(f'جزء ليس اقتباساً من الطلب: «{p}»')
+        covered |= _cw(p)
+    rw = _cw(req)
+    if parts and rw and len(rw - covered) / len(rw) > 0.2:
+        errs.append(f'request_parts لا تغطي الطلب (أكثر من 20% من كلماته): {sorted(rw - covered)[:8]}')
+    pnorm, cited = {_norm(p) for p in parts}, set()
+    for cr in c.get('criteria', []):
+        cid = cr.get('id')
+        keys = [k for k in ('source', 'inferred', 'unknown') if cr.get(k)]
+        if len(keys) != 1:
+            errs.append(f'{cid}: مفتاح واحد فقط من source (اقتباس) | inferred (استنتاج + سببه) | unknown (سؤال للمستخدم)')
+        elif keys[0] == 'unknown':
+            errs.append(f'{cid}: معيار مجهول — اسأل المستخدم قبل البناء: {cr["unknown"]}')
+        elif keys[0] == 'source':
+            if _norm(cr['source']) not in pnorm:
+                errs.append(f'{cid}: source يجب أن يطابق جزءاً من request_parts')
+            else:
+                cited.add(_norm(cr['source']))
+        elif len(str(cr['inferred']).strip()) < 10:
+            errs.append(f'{cid}: سبب الاستنتاج ناقص')
+    oos = {_norm(k): v for k, v in (c.get('out_of_scope') or {}).items()}
+    for k, v in oos.items():
+        if len(str(v).strip()) < 10:
+            errs.append(f'out_of_scope «{k}»: السبب ناقص')
+    for n in sorted(pnorm - cited - set(oos)):
+        errs.append(f'جزء من الطلب بلا معيار يخدمه ولا تبرير لخروجه من النطاق (out_of_scope): «{n}»')
+    for j in c.get('journeys', []):
+        b = (j.get('budget') or {}).get('max_actions')
+        if b is not None:
+            n = sum(1 for s in j.get('steps', []) if any(k in s.get('do', {}) for k in ACTION_KEYS))
+            if n > b:
+                errs.append(f'الرحلة {j.get("id")} تتطلب {n} إجراءات والميزانية المشتقة من الطلب {b}')
+    return errs
+
+
+def lock_view(c):
+    """ما يُقفَل عند أول تشغيل: الطلب والمعايير والتوقعات والميزانيات (لا الإجراءات: إصلاح محدِّد لا يُعدّ تخفيفاً)."""
+    return copy.deepcopy({'request': c.get('request', ''), 'request_parts': c.get('request_parts', []),
+            'criteria': {x.get('id'): {'text': x.get('text'), 'source': x.get('source'), 'inferred': x.get('inferred')}
+                         for x in c.get('criteria', [])},
+            'budgets': {j.get('id'): j.get('budget') or {} for j in c.get('journeys', [])},
+            'steps': {s.get('id'): {'expect': s.get('expect'), 'expect_text': s.get('expect_text', []),
+                                    'expect_visible': s.get('expect_visible', []), 'covers': s.get('covers', [])}
+                      for j in c.get('journeys', []) for s in j.get('steps', [])}})
+
+
+def diff_views(old, new):
+    """تغييرات العقد عن المقفول. «↓» = تخفيف محتمل (حذف توقع/خطوة/معيار أو رفع ميزانية)."""
+    out = []
+    if old['request'] != new['request']:
+        out.append('طلب المستخدم تغيّر')
+    for k in sorted(set(old['request_parts']) ^ set(new['request_parts'])):
+        out.append(f'↓ جزء الطلب «{k}» ' + ('حُذف' if k in old['request_parts'] else 'أُضيف'))
+    for cid in sorted(set(old['criteria']) | set(new['criteria'])):
+        if cid not in new['criteria']:
+            out.append(f'↓ المعيار {cid} حُذف')
+        elif cid not in old['criteria']:
+            out.append(f'المعيار {cid} أُضيف')
+        elif old['criteria'][cid] != new['criteria'][cid]:
+            out.append(f'↓ المعيار {cid} تغيّر')
+    for jid in sorted(set(old['budgets']) | set(new['budgets'])):
+        ob, nb = old['budgets'].get(jid, {}).get('max_actions'), new['budgets'].get(jid, {}).get('max_actions')
+        if ob != nb:
+            out.append(f'{"↓ " if (nb is None or (ob is not None and nb > ob)) else ""}ميزانية {jid}: {ob} ← {nb}')
+    for sid in sorted(set(old['steps']) | set(new['steps'])):
+        if sid not in new['steps']:
+            out.append(f'↓ الخطوة {sid} حُذفت')
+            continue
+        if sid not in old['steps']:
+            out.append(f'الخطوة {sid} أُضيفت')
+            continue
+        o, n = old['steps'][sid], new['steps'][sid]
+        for key in ('expect_text', 'expect_visible'):
+            gone = [x for x in o[key] if x not in n[key]]
+            if gone:
+                out.append(f'↓ {sid}: حُذف توقع {key}: {gone}')
+            if [x for x in n[key] if x not in o[key]]:
+                out.append(f'{sid}: أُضيف توقع {key}')
+        if o['expect'] != n['expect']:
+            out.append(f'↓ {sid}: نص «expect» تغيّر')
+        if o['covers'] != n['covers']:
+            out.append(f'{sid}: covers تغيّرت')
+    return out
+
+
+def _view_sha(v):
+    return hashlib.sha1(json.dumps(v, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
 def validate_contract(c):
@@ -87,18 +209,19 @@ def validate_contract(c):
     for st in PROFILES[t]['states']:
         if st not in tags and not str(na.get(st, '')).strip():
             errs.append(f'الحالة «{st}» لا خطوة تغطيها ولا مبرر عدم الانطباق في na_states')
+    errs += _intent_errors(c)
     return errs
 
 
 def skeleton(t, request):
     p = PROFILES[t]
-    return {'type': t, 'request': request, 'locale': 'ar',
+    return {'type': t, 'request': request, 'request_parts': [], 'out_of_scope': {}, 'locale': 'ar',
             'base': 'http://localhost:8000/' if t == 'web' else '',
             'persona': {'name': '', 'goal': '', 'context': ''},
-            'criteria': [{'id': 'C1', 'text': 'ما الذي يجعل المستخدم راضياً؟ (من منظوره)'}],
+            'criteria': [{'id': 'C1', 'text': 'ما الذي يجعل المستخدم راضياً؟ (من منظوره)', 'source': 'جزء حرفي من request_parts'}],
             'viewports': DEFAULT_VIEWPORTS if t == 'web' else [{'name': 'default'}],
             'na_states': {},
-            'journeys': [{'id': 'J1', 'priority': 'P0', 'goal': '', 'steps': [
+            'journeys': [{'id': 'J1', 'priority': 'P0', 'goal': '', 'budget': {'max_actions': 0}, 'steps': [
                 {'id': 'J1.1', 'state': p['states'][0], 'covers': ['C1'],
                  'do': {'goto': '/'} if t == 'web' else {'cmd': ''},
                  'expect': 'ما يتوقع المستخدم أن يراه بعد هذه الخطوة (قبل التنفيذ)',
@@ -269,7 +392,7 @@ def run_web(c, outdir, settle_ms=400, feedback_cap_ms=4000, text_wait_ms=6000):
                             F.append({'axis': 'feedback', 'sev': 'major', 'code': 'no_visible_feedback',
                                       'detail': f'لم يتغير شيء مرئي خلال {feedback_cap_ms}ms بعد الإجراء'})
                         elif t_feedback and t_feedback > 1000:
-                            F.append({'axis': 'performance', 'sev': 'major' if t_feedback > 2000 else 'minor',
+                            F.append({'axis': 'performance', 'sev': 'major',
                                       'code': 'slow_feedback', 'detail': f'أول ردّ فعل مرئي بعد {t_feedback}ms'})
                     exp = s.get('expect_text', [])
                     t_exp = None
@@ -415,7 +538,7 @@ def cmd_judge(a):
 # ───────────────────────── التقرير والبوابة ─────────────────────────
 
 
-def build_report(contract, ev, judgments):
+def build_report(contract, ev, judgments, lock=None):
     prof = PROFILES[contract['type']]
     cur = {(e['step'], e['viewport']): e for e in ev}
     latest = {}
@@ -443,6 +566,8 @@ def build_report(contract, ev, judgments):
     unsure = [f'{k[0]}/{k[1]}' for k, j in latest.items() if j['verdict'] == 'unsure']
     need_indep = [f'{e["step"]}/{e["viewport"]}' for e in ev if contract.get('require_independent') and e['priority'] == 'P0'
                   and (e['step'], e['viewport']) in latest and latest[(e['step'], e['viewport'])].get('by') != 'independent']
+    changes = diff_views(lock['view'], lock_view(contract)) if lock else []
+    assumptions = [f'{x["id"]}: {x["inferred"]}' for x in contract.get('criteria', []) if x.get('inferred')]
     tags = {e['state'] for e in ev if e['state']}
     na = contract.get('na_states', {})
     uncovered_states = [s for s in prof['states'] if s not in tags and s not in na]
@@ -456,7 +581,7 @@ def build_report(contract, ev, judgments):
     p0_major = [f for f in findings if f['sev'] == 'major' and f['p0']]
     if blockers or p0_major:
         verdict = 'FAIL'
-    elif unjudged or unsure or uncovered_states or uncovered_crit or stale or need_indep:
+    elif unjudged or unsure or uncovered_states or uncovered_crit or stale or need_indep or changes:
         verdict = 'INCOMPLETE'
     else:
         verdict = 'PASS'
@@ -465,6 +590,8 @@ def build_report(contract, ev, judgments):
             'unjudged': unjudged, 'unsure': unsure, 'need_independent_review': need_indep,
             'self_judged': sum(j.get('by', 'self') == 'self' for j in latest.values()), 'independent_judged': sum(j.get('by') == 'independent' for j in latest.values()), 'stale_judgments': [f'{a}/{b}' for a, b in stale],
             'uncovered_states': uncovered_states, 'uncovered_criteria': uncovered_crit,
+            'contract_changes': changes, 'relocks': [r_['reason'] for r_ in (lock or {}).get('relocks', [])],
+            'assumptions_to_confirm': assumptions,
             'findings': findings, 'not_covered': NOT_COVERED}
 
 
@@ -475,7 +602,9 @@ def print_report(r):
     for f in sorted(r['findings'], key=lambda f: -SEV_W[f['sev']])[:14]:
         print(f'  [{f["sev"]:7}] {f["step"]}/{f["viewport"]} {f["code"]}: {f["detail"]}')
     for k, lbl in (('unjudged', 'خطوات لم تُحكم بعد'), ('unsure', 'أحكام «غير متأكد»'), ('need_independent_review', 'تنتظر مراجعاً مستقلاً'), ('stale_judgments', 'أحكام سقطت (تغيّرت اللقطة)'),
-                   ('uncovered_states', 'حالات لم يرها المستخدم'), ('uncovered_criteria', 'معايير بلا تغطية')):
+                   ('uncovered_states', 'حالات لم يرها المستخدم'), ('uncovered_criteria', 'معايير بلا تغطية'),
+                   ('contract_changes', 'العقد تغيّر بعد القفل (relock بتبرير أو تراجع)'), ('relocks', 'تعديلات عقد مبرَّرة'),
+                   ('assumptions_to_confirm', 'افتراضات تُؤكَّد مع المستخدم عند التسليم')):
         if r[k]:
             print(f'  ← {lbl}: {", ".join(r[k])}')
     print(f'  أحكام إدراكية: ذاتية={r["self_judged"]} مستقلة={r["independent_judged"]}')
@@ -498,6 +627,8 @@ def main(argv=None):
     j.add_argument('--sev'); j.add_argument('--note', default='')
     j.add_argument('--by', default='self', choices=['self', 'independent'], help='independent = مراجع آخر (وكيل بعيون جديدة أو إنسان)')
     g = sp.add_parser('gate'); g.add_argument('contract'); g.add_argument('--json', action='store_true')
+    g.add_argument('--attempt', default=None, help='عند FAIL: ما جرّبته للإصلاح — يُسجَّل في قاعدة الإيقاف (3 مسارات مختلفة = توقف)')
+    rl = sp.add_parser('relock', help='اعتماد تعديل العقد بعد القفل مع تبرير'); rl.add_argument('contract'); rl.add_argument('--reason', required=True)
     a = ap.parse_args(argv)
     if a.cmd == 'profile':
         pr = PROFILES[a.type]
@@ -527,22 +658,61 @@ def main(argv=None):
         if ev is None:
             return 3
         _write_json(state_path('ux/evidence.json'), ev)
+        if not os.path.exists(state_path('ux/lock.json')):  # أول تشغيل: قفل الطلب والمعايير والتوقعات
+            v = lock_view(c)
+            _write_json(state_path('ux/lock.json'), {'sha': _view_sha(v), 'view': v, 'relocks': [], 't': time.time()})
         n = sum(len(e['findings']) for e in ev)
         print(f'نُفِّذت {len(ev)} خطوة×حجم | {n} ملاحظة موضوعية | اللقطات: {shots}\n'
               f'الآن: افتح كل لقطة بأداة view بعين المستخدم، ثم `judge` لكل خطوة، ثم `gate`.')
         return 0
+    if a.cmd == 'relock':
+        lk = _read_json(state_path('ux/lock.json'), None)
+        if not lk:
+            print('لا قفل — شغّل run أولاً', file=sys.stderr)
+            return 3
+        if len(a.reason.strip()) < 15:
+            print('التبرير قصير (≥15 حرفاً): لماذا تغيّر العقد؟ (مثلاً: المستخدم عدّل طلبه)', file=sys.stderr)
+            return 1
+        v = lock_view(c)
+        ch = diff_views(lk['view'], v)
+        if not ch:
+            print('لا تغيير عن القفل')
+            return 0
+        lk['relocks'].append({'t': time.time(), 'reason': a.reason.strip(), 'changes': ch})
+        lk['view'], lk['sha'] = v, _view_sha(v)
+        _write_json(state_path('ux/lock.json'), lk)
+        print(f'اعتُمد {len(ch)} تغيير بتبرير مسجَّل (يظهر في تقرير gate)')
+        return 0
     if a.cmd == 'gate':
-        ev = _read_json(state_path('ux/evidence.json'), None)
+        evp = state_path('ux/evidence.json')
+        ev = _read_json(evp, None)
         if not ev:
             print('لا أدلة — شغّل run', file=sys.stderr)
             return 3
         jp = state_path('ux/judgments.jsonl')
         js = [json.loads(l) for l in open(jp, encoding='utf-8')] if os.path.exists(jp) else []
-        rep = build_report(c, ev, js)
+        rep = build_report(c, ev, js, _read_json(state_path('ux/lock.json'), None))
+        with open(evp, 'rb') as f:
+            esha = hashlib.sha1(f.read()).hexdigest()
+        _write_json(state_path('ux/last_gate.json'), {'verdict': rep['verdict'], 't': time.time(), 'evidence_sha': esha,
+                                                      'contract_sha': _view_sha(lock_view(c))})
         if a.json:
             print(json.dumps(rep, ensure_ascii=False, indent=1))
         else:
             print_report(rep)
+        if rep['verdict'] == 'FAIL':
+            top = max(rep['findings'], key=lambda f: SEV_W[f['sev']]) if rep['findings'] else {'code': 'fail', 'detail': ''}
+            if a.attempt:
+                try:
+                    res = record_attempt(a.attempt, f'{top["code"]}: {top["detail"]}'[:120])
+                    print(f'سُجّلت المحاولة: مسارات مختلفة فاشلة {res["distinct"]}/{res["max"]}', file=sys.stderr)
+                except StopTriggered as e:
+                    print(str(e), file=sys.stderr)
+                    return 4
+                except GateViolation as e:
+                    print(str(e), file=sys.stderr)
+            elif not a.json:
+                print('  ← بعد الإصلاح: run ثم gate --attempt "<ما جرّبته>" (يحسبها قاعدة الإيقاف: 3 مسارات مختلفة = توقف وصعود)')
         return {'PASS': 0, 'FAIL': 1, 'INCOMPLETE': 2}[rep['verdict']]
     return 0
 

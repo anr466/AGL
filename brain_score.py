@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """مقياس أداء العقل الهندسي — يقيس السلوك لا المخرج
-يُطبق على أي جلسة عمل حية ويقيس 10 محاور تفكير بأدلة."""
+يُطبق على أي جلسة عمل حية ويقيس 11 محور تفكير بأدلة.
+
+القيم: True = دليل موجود | False = ثبت غيابه | None = لم يُمارَس في هذه الجلسة (يُستثنى من المجموع ولا يُحتسب نجاحاً).
+المقارنة صارمة `is True` — «False» نصاً أو 1 أو قائمة لا تُحتسب."""
 
 import json
 
-# محاور القياس العشرة — كل محور له معيار نجاح ودليل مطلوب
+# محاور القياس الأحد عشر — كل محور له معيار نجاح ودليل مطلوب
 AXES = {
     'priority': {
         'name': 'إدارة الأولويات',
@@ -60,6 +63,13 @@ AXES = {
         'evidence_needed': ['انتقائية موثقة', 'تفرد موثق', 'كل مقيّم يخدم الهدف'],
         'weight': 0.8,
     },
+    'user_eye': {
+        'name': 'عين المستخدم (التجربة المرئية)',
+        'question': 'هل تقمّص المستخدم فشغّل التدفق الفعلي ورآه، وبتوقعات مكتوبة قبل البناء، وحكم بصدق وأعلن ما لم يشاهده؟',
+        'evidence_needed': ['عقد التجربة بتوقعات مسبقة', 'التدفق شُغّل ورُئي فعلاً', 'الحالات الواجبة رُئيت',
+                            'حكم صادق وما لم يُشاهَد معلن'],
+        'weight': 1.2,
+    },
     'escalation': {
         'name': 'الصعود المُسبَّب (3 مسارات)',
         'question': 'هل توقف عند 3 مسارات مختلفة فشلت؟ هل صعد بالدليل الكامل؟',
@@ -75,8 +85,13 @@ def score_session(session_evidence: dict) -> dict:
     report = {'axes': [], 'total_score': 0, 'max_score': 0, 'grade': ''}
 
     for axis_id, axis in AXES.items():
-        evidence = session_evidence.get(axis_id, {})
-        checks_passed = sum(1 for c in axis['evidence_needed'] if evidence.get(c, False))
+        evidence = session_evidence.get(axis_id)
+        if evidence is None or (evidence and all(evidence.get(c) is None for c in axis['evidence_needed'])):
+            report['axes'].append({'axis': axis['name'], 'score': 'غير مُمارَس', 'weighted': None,
+                                   'question': axis['question'], 'evidence': []})
+            report['not_practiced'] = report.get('not_practiced', []) + [axis_id]
+            continue
+        checks_passed = sum(1 for c in axis['evidence_needed'] if evidence.get(c) is True)
         checks_total = len(axis['evidence_needed'])
         ratio = checks_passed / checks_total if checks_total else 0
         weighted = ratio * axis['weight']
@@ -86,7 +101,7 @@ def score_session(session_evidence: dict) -> dict:
             'score': f'{checks_passed}/{checks_total}',
             'weighted': round(weighted, 2),
             'question': axis['question'],
-            'evidence': [e for e in axis['evidence_needed'] if evidence.get(e, False)],
+            'evidence': [e for e in axis['evidence_needed'] if evidence.get(e) is True],
         })
         report['total_score'] += weighted
         report['max_score'] += axis['weight']
@@ -103,57 +118,19 @@ def score_session(session_evidence: dict) -> dict:
     return report
 
 
-# مثال تطبيقي: تقييم جلسة بناء الاختبارات (LMS 20/10)
+# مثال توضيحي بمحتوى محايد — ليس قياس جلسة حقيقية
 if __name__ == '__main__':
+    T = True
     session = {
-        'priority': {
-            'ترتيب الأولويات مكتوب': True,
-            'رفض موثق بسببه': True,   # رفض حذف ksa-news-deep (2/5 فريدة)
-            'استفسار عن الغامض قبل التنفيذ': True,  # طلب توضيح نوع القناة
-        },
-        'discipline': {
-            'الطريق الصحيح مختار': True,      # إعادة بناء بدل ترقيع
-            'المختصر مسمى ومرفوض بسببه': True,  # «ترقيع لحظي» مسمى
-        },
-        'error_handling': {
-            'تصنيف موثق لكل فشل': True,       # تصنيف الفشل الرباعي
-            'بروتوكول النوع مطبق': True,       # افتراض ← اختبر وحدة
-            'لا ترقيع أعراض': True,            # الجذر مرة
-        },
-        'comprehension': {
-            'قراءة موثقة من المصدر': True,     # سجلات التحضير من المنصة
-            'تصنيف موثق/مستنتج/مجهول': True,
-            'صفر افتراض بلا فحص': False,      # افترض التصنيف صحيح بلا فحص
-        },
-        'verification': {
-            'قراءة عكسية موثقة': True,         # slots readback
-            'أرقام حرفية (5/5, 10.00)': True,  # أرقام حرفية
-            'فشل معلن فشلاً': True,            # «عدّاد صفر = فشل» معلن
-        },
-        'council': {
-            'أصوات متعددة موثقة': True,        # 4 محاور في قرار ksa-news
-            'حسم بأقل اعتراض مبرر': True,
-            'القرار + البديل + السبب': True,    # حذف كامل بدل ترقيع
-        },
-        'scope': {
-            'كل المتأثرين مغطون': True,        # 4 شعب × 10 أسئلة
-            'صفر إضافات غير مطلوبة': True,
-            'النطاق = الأثر': True,
-        },
-        'uniqueness': {
-            'صفر ملفات بنفس الوظيفة': True,    # بعد التنظيف
-            'صفر توكن محروق على تكرار': True,
-        },
-        'memory_quality': {
-            'انتقائية موثقة': True,            # سجل النجاح الكامل
-            'تفرد موثق': True,                 # القوانين مرة واحدة
-            'كل مقيّم يخدم الهدف': True,
-        },
-        'escalation': {
-            'العدّ = 3 بالضبط': True,           # 3 مسارات مختلفة
-            'التقرير شامل': True,
-        },
+        'priority': {'ترتيب الأولويات مكتوب': T, 'رفض موثق بسببه': T, 'استفسار عن الغامض قبل التنفيذ': T},
+        'discipline': {'الطريق الصحيح مختار': T, 'المختصر مسمى ومرفوض بسببه': T},
+        'error_handling': {'تصنيف موثق لكل فشل': T, 'بروتوكول النوع مطبق': T, 'لا ترقيع أعراض': T},
+        'comprehension': {'قراءة موثقة من المصدر': T, 'تصنيف موثق/مستنتج/مجهول': T, 'صفر افتراض بلا فحص': False},
+        'verification': {'قراءة عكسية موثقة': T, 'أرقام حرفية (5/5, 10.00)': T, 'فشل معلن فشلاً': T},
+        'council': None,  # لم يُعقد مجلس في هذه الجلسة الوهمية
+        'user_eye': {'عقد التجربة بتوقعات مسبقة': T, 'التدفق شُغّل ورُئي فعلاً': T,
+                     'الحالات الواجبة رُئيت': False, 'حكم صادق وما لم يُشاهَد معلن': T},
     }
-
     report = score_session(session)
+    report['_demo'] = 'مثال توضيحي لا جلسة حقيقية — لا تستشهد بهذا الرقم'
     print(json.dumps(report, ensure_ascii=False, indent=1))

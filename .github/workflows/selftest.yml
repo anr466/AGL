@@ -10,5 +10,7 @@ jobs:
           python-version: "3.x"
       - run: python gates_selftest.py
       - run: python test_hardening.py
+      - run: python test_recon.py
       - run: python test_ux_gate.py
+      - run: python test_consistency.py
       - run: python brain_score.py > /dev/null

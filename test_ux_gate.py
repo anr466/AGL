@@ -14,13 +14,20 @@ os.environ['AGL_STATE_DIR'] = tempfile.mkdtemp()
 import ux_gate as U  # noqa: E402
 
 
+REQ = 'أريد أن أطلب قهوة بضغطة واحدة وأن أرى أثر الإضافة وأفهم الخطأ'
+
+
 def good_contract():
-    return {'type': 'web', 'locale': 'ar', 'base': '',
+    return {'type': 'web', 'locale': 'ar', 'base': '', 'request': REQ,
+            'request_parts': ['أطلب قهوة بضغطة واحدة', 'أرى أثر الإضافة', 'أفهم الخطأ'],
+            'out_of_scope': {},
             'persona': {'name': 'سارة', 'goal': 'تطلب قهوة', 'context': 'هاتف عربي مستعجلة'},
-            'criteria': [{'id': 'C1', 'text': 'ترى أثر الإضافة'}, {'id': 'C2', 'text': 'تفهم الخطأ'}],
+            'criteria': [{'id': 'C1', 'text': 'ترى أثر الإضافة', 'source': 'أرى أثر الإضافة'},
+                         {'id': 'C2', 'text': 'تفهم الخطأ', 'source': 'أفهم الخطأ'},
+                         {'id': 'C3', 'text': 'الطلب بإجراء واحد', 'source': 'أطلب قهوة بضغطة واحدة'}],
             'na_states': {'loading': 'لا تحميل شبكي', 'empty': 'غير منطبق هنا', 'success': 'غير منطبق هنا'},
-            'journeys': [{'id': 'J1', 'priority': 'P0', 'steps': [
-                {'id': 'J1.1', 'state': 'initial', 'covers': ['C1'], 'do': {'goto': 'index.html'}, 'expect': 'تظهر شاشة المتجر كاملة'},
+            'journeys': [{'id': 'J1', 'priority': 'P0', 'budget': {'max_actions': 2}, 'steps': [
+                {'id': 'J1.1', 'state': 'initial', 'covers': ['C1', 'C3'], 'do': {'goto': 'index.html'}, 'expect': 'تظهر شاشة المتجر كاملة'},
                 {'id': 'J1.2', 'state': 'error', 'covers': ['C2'], 'do': {'click': '#x'}, 'expect': 'تظهر رسالة خطأ مفهومة'}]}]}
 
 
@@ -41,8 +48,8 @@ class Contract(unittest.TestCase):
     def test_each_gap_is_reported(self):
         c = good_contract(); c['persona']['goal'] = ''
         self.assertTrue(any('persona.goal' in e for e in U.validate_contract(c)))
-        c = good_contract(); c['criteria'].append({'id': 'C3', 'text': 'x'})
-        self.assertTrue(any('C3' in e for e in U.validate_contract(c)))
+        c = good_contract(); c['criteria'].append({'id': 'C9', 'text': 'x', 'source': 'أفهم الخطأ'}); c['criteria'][0].pop('source')
+        self.assertTrue(any('C9' in e or 'C1' in e for e in U.validate_contract(c)))
         c = good_contract(); c['na_states'].pop('loading')
         self.assertTrue(any('loading' in e for e in U.validate_contract(c)))
         c = good_contract(); c['journeys'][0]['steps'][0]['expect'] = 'قصير'
@@ -50,6 +57,51 @@ class Contract(unittest.TestCase):
         c = good_contract(); c['journeys'][0]['priority'] = 'P1'
         self.assertTrue(any('P0' in e for e in U.validate_contract(c)))
         self.assertTrue(U.validate_contract({'type': 'nope'}))
+
+    def _errs(self, mut):
+        c = good_contract(); mut(c)
+        return U.validate_contract(c)
+
+    def test_intent_bridge(self):
+        def part(c): c['request_parts'][0] = 'أطلب شاياً'
+        self.assertTrue(any('ليس اقتباساً' in e for e in self._errs(part)))
+        def short(c): c['request'] = 'قهوة'
+        self.assertTrue(any('request ناقص' in e for e in self._errs(short)))
+        def unk(c): c['criteria'][0] = {'id': 'C1', 'text': 't', 'unknown': 'كم ثانية مقبولة؟'}
+        self.assertTrue(any('اسأل المستخدم' in e for e in self._errs(unk)))
+        def both(c): c['criteria'][0]['inferred'] = 'سبب كافٍ جداً هنا'
+        self.assertTrue(any('مفتاح واحد' in e for e in self._errs(both)))
+        def orphan(c): c['criteria'].pop()   # جزء من الطلب بلا معيار
+        self.assertTrue(any('بلا معيار' in e for e in self._errs(orphan)))
+        def oos(c):
+            c['criteria'].pop(); c['journeys'][0]['steps'][0]['covers'] = ['C1']; c['out_of_scope'] = {'أطلب قهوة بضغطة واحدة': 'مؤجل بقرار المستخدم صراحة'}
+        self.assertEqual(self._errs(oos), [])
+        def thin(c): c['request_parts'] = ['أرى أثر الإضافة']
+        self.assertTrue(any('لا تغطي' in e for e in self._errs(thin)))
+
+    def test_budget_checked_statically(self):
+        def over(c): c['journeys'][0]['budget']['max_actions'] = 0
+        self.assertTrue(any('ميزانية' in e for e in self._errs(over)))
+
+    def test_lock_detects_loosening(self):
+        c = good_contract(); old = U.lock_view(c)
+        c2 = good_contract(); c2['journeys'][0]['steps'][0]['expect_text'] = []
+        self.assertEqual(U.diff_views(old, U.lock_view(c2)), [])
+        c = good_contract(); c['journeys'][0]['steps'][0]['expect_text'] = ['متجر']; old = U.lock_view(c)
+        c['journeys'][0]['steps'][0]['expect_text'] = []
+        self.assertTrue(any(d.startswith('↓') for d in U.diff_views(old, U.lock_view(c))))
+        c = good_contract(); old = U.lock_view(c); c['criteria'].pop(1)
+        self.assertTrue(any('↓' in d and 'C2' in d for d in U.diff_views(old, U.lock_view(c))))
+        c = good_contract(); old = U.lock_view(c); c['journeys'][0]['budget']['max_actions'] = 5
+        self.assertTrue(any(d.startswith('↓') for d in U.diff_views(old, U.lock_view(c))))
+
+    def test_report_incomplete_on_contract_change_and_assumptions(self):
+        c = good_contract(); c['criteria'][1] = {'id': 'C2', 'text': 'تفهم الخطأ', 'inferred': 'المستخدم عربي فالرسالة بالعربية'}
+        r = U.build_report(c, [ev_entry('J1.1', covers=['C1', 'C3']), ev_entry('J1.2', state='error', covers=['C2'])],
+                           [jd('J1.1'), jd('J1.2')], lock={'view': U.lock_view(good_contract()), 'relocks': []})
+        self.assertEqual(r['verdict'], 'INCOMPLETE')
+        self.assertTrue(r['contract_changes'])
+        self.assertTrue(r['assumptions_to_confirm'])
 
     def test_skeleton_is_not_valid_until_filled(self):
         for t in U.PROFILES:
@@ -79,7 +131,7 @@ class Report(unittest.TestCase):
         return U.build_report(c or self.C, ev, js)
 
     def full(self, sha='a'):
-        return [ev_entry('J1.1', sha=sha, state='initial', covers=['C1']), ev_entry('J1.2', sha=sha, state='error', covers=['C2'])]
+        return [ev_entry('J1.1', sha=sha, state='initial', covers=['C1', 'C3']), ev_entry('J1.2', sha=sha, state='error', covers=['C2'])]
 
     def test_pass_only_when_everything_judged_and_covered(self):
         r = self.rep(self.full(), [jd('J1.1'), jd('J1.2')])
@@ -200,6 +252,88 @@ def _browser_ok():
         return True
     except Exception:
         return False
+
+
+class GateFlow(unittest.TestCase):
+    """حلقة التسليم المغلقة عبر CLI بلا متصفح: أدلة مُجهَّزة → gate → attempt → stop → relock."""
+
+    def setUp(self):
+        import json
+        self.json = json
+        self.d = tempfile.mkdtemp()
+        self.env = {**os.environ, 'AGL_STATE_DIR': os.path.join(self.d, 'st')}
+        os.makedirs(os.path.join(self.d, 'st', 'ux'))
+        self.cpath = os.path.join(self.d, 'c.json')
+        with open(self.cpath, 'w', encoding='utf-8') as f:
+            json.dump(good_contract(), f, ensure_ascii=False)
+
+    def put(self, ev, judgments, lock=True):
+        st = os.path.join(self.d, 'st', 'ux')
+        with open(os.path.join(st, 'evidence.json'), 'w', encoding='utf-8') as f:
+            self.json.dump(ev, f, ensure_ascii=False)
+        with open(os.path.join(st, 'judgments.jsonl'), 'w', encoding='utf-8') as f:
+            for j in judgments:
+                f.write(self.json.dumps(j, ensure_ascii=False) + '\n')
+        if lock:
+            v = U.lock_view(good_contract())
+            with open(os.path.join(st, 'lock.json'), 'w', encoding='utf-8') as f:
+                self.json.dump({'sha': U._view_sha(v), 'view': v, 'relocks': [], 't': 0}, f, ensure_ascii=False)
+
+    def cli(self, *a):
+        return subprocess.run([sys.executable, os.path.join(HERE, 'ux_gate.py'), *a], capture_output=True, text=True, env=self.env)
+
+    def good_ev(self, bad=False):
+        ev = [ev_entry('J1.1', state='initial', covers=['C1', 'C3']), ev_entry('J1.2', state='error', covers=['C2'])]
+        if bad:
+            ev[0]['findings'] = [{'axis': 'flow', 'sev': 'blocker', 'code': 'obscured_control', 'detail': 'x'}]
+        return ev
+
+    def test_pass_writes_last_gate_bound_to_evidence(self):
+        self.put(self.good_ev(), [jd('J1.1'), jd('J1.2')])
+        r = self.cli('gate', self.cpath)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        import hashlib
+        with open(os.path.join(self.d, 'st', 'ux', 'last_gate.json'), encoding='utf-8') as f:
+            lg = self.json.load(f)
+        with open(os.path.join(self.d, 'st', 'ux', 'evidence.json'), 'rb') as f:
+            sha = hashlib.sha1(f.read()).hexdigest()
+        self.assertEqual((lg['verdict'], lg['evidence_sha']), ('PASS', sha))
+
+    def test_three_distinct_failed_attempts_stop_with_code_4(self):
+        self.put(self.good_ev(bad=True), [jd('J1.1'), jd('J1.2')])
+        self.assertEqual(self.cli('gate', self.cpath).returncode, 1)
+        codes = [self.cli('gate', self.cpath, '--attempt', a).returncode
+                 for a in ('رفع z-index للزر', 'استبدال الغطاء بعنصر مختلف تماماً', 'إعادة بناء البطاقة بلا موضع مطلق')]
+        self.assertEqual(codes, [1, 1, 4])
+
+    def test_near_duplicate_attempt_not_counted_as_new_path(self):
+        self.put(self.good_ev(bad=True), [jd('J1.1'), jd('J1.2')])
+        self.cli('gate', self.cpath, '--attempt', 'رفع z-index للزر')
+        r = self.cli('gate', self.cpath, '--attempt', 'رفع z-index للزر الآن')
+        self.assertEqual(r.returncode, 1)
+        with open(os.path.join(self.d, 'st', 'stop.json'), encoding='utf-8') as f:
+            self.assertEqual(len(self.json.load(f)['tried']), 1)  # المسار شبه المكرر لم يُحسب مساراً جديداً
+
+    def test_loosening_after_lock_is_incomplete_until_relock(self):
+        c = good_contract(); c['journeys'][0]['steps'][0]['expect_text'] = ['متجر']
+        self.cpath2 = os.path.join(self.d, 'c2.json')
+        v = U.lock_view(c)
+        self.put(self.good_ev(), [jd('J1.1'), jd('J1.2')], lock=False)
+        with open(os.path.join(self.d, 'st', 'ux', 'lock.json'), 'w', encoding='utf-8') as f:
+            self.json.dump({'sha': U._view_sha(v), 'view': v, 'relocks': [], 't': 0}, f, ensure_ascii=False)
+        r = self.cli('gate', self.cpath)           # العقد الحالي حذف توقعاً مقفولاً
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn('↓', r.stdout)
+        self.assertEqual(self.cli('relock', self.cpath, '--reason', 'قصير').returncode, 1)
+        self.assertEqual(self.cli('relock', self.cpath, '--reason', 'المستخدم عدّل الطلب وأزال هذا التوقع').returncode, 0)
+        r = self.cli('gate', self.cpath)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn('المستخدم عدّل الطلب', r.stdout)
+
+    def test_gate_without_evidence_is_exit_3(self):
+        self.assertEqual(self.cli('gate', self.cpath).returncode, 3)
+
+
 
 
 @unittest.skipUnless(_browser_ok(), 'Playwright/Chromium غير متوفر — تُتخطّى اختبارات المتصفح')

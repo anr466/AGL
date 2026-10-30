@@ -1,124 +1,88 @@
 <div align="center">
 
-<img src="logo/agl_logo.png" alt="AGL" width="180">
+<img src="logo/agl_logo.png" alt="AGL" width="140">
 
-# AGL — The Engineering Mind
+# AGL — العقل الهندسي · The Engineering Mind
 
-**العقل الهندسي الموحد**
+**يفهم طلبك ومشروعك، ثم لا يسلّم إلا ما رآه يعمل بعين المستخدم.**
+*Understands your request and project first — delivers only what it has seen working through the user's eyes.*
 
-*Turns AI coding agents from impulsive generators into disciplined engineers.*
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-13%2F13-brightgreen.svg)](gates_selftest.py)
-[![Deps](https://img.shields.io/badge/deps-zero-black.svg)]()
-[![ar](https://img.shields.io/badge/lang-العربية-green.svg)]()
-
-[Install](#-install) · [The 6 Laws](#-the-six-laws) · [العربية](#-ar)
+[![selftest](https://github.com/anr466/AGL/actions/workflows/selftest.yml/badge.svg)](https://github.com/anr466/AGL/actions/workflows/selftest.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+![deps](https://img.shields.io/badge/deps-stdlib%20only-black.svg)
 
 </div>
 
----
+## المشكلة · The problem
 
-## The Problem
-
-Every AI coding agent shares the same failures:
-
-```text
-❌ Says "done!" without verification
-❌ Patches symptoms, ignores root cause
-❌ Repeats the same mistake every session
-❌ Over-engineers what nobody asked for
-❌ Loops infinitely, burning tokens
+```mermaid
+flowchart LR
+    A["طلب المستخدم"] --> B["الوكيل يخمّن الفهم"]
+    B --> C["يكتب كوداً"]
+    C --> D{"اختبارات الكود ✓"}
+    D --> E["«تم!»"]
+    E --> F["المستخدم يفتح الواجهة<br/>الزر مغطّى · النص غير مرئي · لا شيء يحدث"]
+    style F fill:#fde8e8,stroke:#c0392b
+    style E fill:#fff4d6,stroke:#b9770e
 ```
 
-## The Fix
+الاختبارات البرمجية تثبت أن **المنطق** صحيح، لا أن **الإنسان** يستطيع الاستخدام. والوكيل يبدأ غالباً دون أن يفهم الطلب بحروفه أو المشروع الذي يعمل فيه.
 
-```text
-✅ Iron Law: fresh evidence in this message — or no claim
-✅ Root cause once — never patch symptoms
-✅ Council of 6 reviews every major decision
-✅ Stop after 3 distinct failed paths — escalate
-✅ Memory is a curated knowledge base, not a log
+## الحل · The loop
+
+```mermaid
+flowchart TD
+    R["طلب المستخدم (حرفياً)"] --> U["② افهم: الطلب + المشروع<br/><code>recon.py</code>"]
+    U -->|مجهول حرج| Q["اسأل المستخدم"]
+    U --> K["③ عقد التجربة من كلامه<br/>كل معيار = اقتباس أو استنتاج معلن<br/><code>ux_gate.py</code>"]
+    K --> B["⑦ ابنِ"]
+    B --> E["⑨ شغّل وانظر كمستخدم<br/>قياس موضوعي + حكم على ما رُئي"]
+    E -->|FAIL| X["صنّف ← أصلح<br/><code>gate --attempt</code>"]
+    X -->|3 مسارات مختلفة فاشلة| S["توقف وصعود للمستخدم"]
+    X --> E
+    E -->|PASS| V["<code>gates.py verify --visible ux</code><br/>قراءة عكسية"]
+    V --> D["سلّم: النتيجة + الافتراضات + ما لم يُشاهَد"]
+    style S fill:#fde8e8,stroke:#c0392b
+    style D fill:#e6f4ea,stroke:#1e8e3e
 ```
 
-**One file. Any editor. Any agent.**
+| ما يمنعه | كيف |
+|---|---|
+| «تم» بلا دليل | القانون الحديدي: دليل طازج في نفس الرسالة، و`verify` يرفض القديم والفارغ |
+| فهم مخمَّن | `request_parts` اقتباسات حرفية؛ معيار مجهول = سؤال، لا بناء |
+| تخفيف التوقعات بعد رؤية النتائج | قفل العقد عند أول تشغيل؛ التخفيف «↓» يوقف الحكم حتى `relock` بتبرير |
+| الدوران بلا نهاية | 3 مسارات **مختلفة** فاشلة = توقف؛ المسار شبه المكرر لا يُحسب |
+| حذف ملفاتك | لا يُحذف إلا ما سجّله الوكيل قبل إنشائه، وما ليس في git |
+| أوامر مدمرة | حراس شلّية + خطّاف Claude Code (`ask` / `deny`) |
 
----
-
-## ✨ What You Get
-
-| | | |
-|---|---|---|
-| 🏛️ | **Council of 6** | Every architectural decision reviewed by 6 voices — builder, red team, guardian, user, historian, visionary |
-| ⚖️ | **Iron Law** | Fresh evidence in this message — or no claim |
-| 🧬 | **Knowledge Tiers** | Documented / Inferred / Unknown — prevents deciding on unknowns |
-| 📁 | **File Exclusivity** | Adopted stays / Experimental goes — user files untouchable |
-| 🛑 | **Stop Rule** | 3 distinct failed paths = escalate with evidence |
-| 🌍 | **Arabic / RTL** | First framework with full Arabic methodology |
-
----
-
-## 📥 Install
-
-### One File (any editor)
-
-Copy `SKILL.md` to your agent's skills folder:
-- **Claude Code**: `.claude/skills/engineering-os/SKILL.md`
-- **Cursor**: `.cursor/rules/engineering-os.mdc`
-- **Any agent**: add to system prompt
-
-### Full Package (enforcement gates)
+## التثبيت · Install
 
 ```bash
 git clone https://github.com/anr466/AGL.git
-python3 AGL/install.py --project /path/to/your/project
+python3 AGL/install.py --claude --project /path/to/project   # أو بدون --claude لمسار عام
 ```
 
-`gates.py` gives you code-level enforcement: verify_readback, StopRule, FileExclusivity, classify_failure.
+يطبع مقطع الخطّاف لـ`.claude/settings.json` ولا يعدّل شيئاً بنفسه. `SKILL.md` وحده يعمل في أي وكيل؛ الأدوات تضيف الفرض الآلي. المتطلبات: Python 3 فقط، و[Playwright](https://playwright.dev/python/) اختيارياً لاختبار الواجهات في المتصفح.
 
----
+## ما بداخله
 
-## 🌍 Arabic / العربية
+| الملف | الدور |
+|---|---|
+| `SKILL.md` | العقل: المبدأ، القوانين الستة، الحلقات التسع، المجلس، البروتوكولات |
+| `references/` | تفاصيل الأدوات: `gates.md` · `user-eye.md` · `recon.md` |
+| `gates.py` `jobs.py` `hook_pretooluse.py` | التحقق، الإيقاف، الحراس، مهام الخلفية، الفرض الإلزامي |
+| `ux_gate.py` | عين المستخدم: عقد من الطلب + قياس + حكم + قفل |
+| `recon.py` | فهم المشروع: ما هو موثق وما هو مستنتج وما هو مجهول |
+| `BRAIN_TEST.md` `brain_score.py` | قياس العقل نفسه: سبعة اختبارات سلوكية و11 محوراً |
 
-<div dir="rtl">
+## حدود معلنة
 
-### AGL — العقل الهندسي الموحد
+- الحراس تحليل ساكن: لا تلتقط `eval` ولا `python -c`.
+- الحكم الإدراكي ذاتي ما لم يُمرَّر `--by independent`.
+- لا تغطية للمس على جهاز حقيقي، ولا قارئ الشاشة، ولا الشبكة البطيئة، ولا متصفحات غير Chromium.
+- الخطّاف واختبار القياس لم يُجرَّبا إلا في بيئات اختبار، وعينات القياس صغيرة.
+- مهام الخلفية POSIX فقط.
 
-نظام تشغيل معرفي يحوّل وكيل البرمجة من مولّد كود مندفع إلى مهندس منضبط.
+## المساهمة والرخصة
 
-**المشكلة**: الوكيل يقول «نجح!» بلا تحقق، يرقّع الأعراض، يكرر نفس الخطأ، يبالغ بالتعقيد، ويدور بلا نهاية.
-
-**الحل**: القانون الحديدي (دليل طازج أو لا ادعاء) + الجذر مرة + مجلس ستة + قاعدة الإيقاف + ذاكرة انتقائية موجهة للهدف.
-
-**ميزة فريدة**: أول إطار يدعم العربية والـRTL بمنهجية هندسية كاملة — من ندوب حقيقية ببيئة عربية.
-
-</div>
-
----
-
-## 📂 Structure
-
-```text
-AGL/
-├── SKILL.md              ← The Brain
-├── LICENSE               ← Apache-2.0
-├── README.md             ← This file
-├── BRAIN_TEST.md         ← Brain test battery (6 tests)
-├── brain_score.py        ← Mind performance score (10 axes)
-├── gates.py              ← Enforcement gates
-├── gates_selftest.py     ← Gate self-test (13/13)
-├── install.py            ← Auto-installer
-├── hook_pretooluse.py    ← Pre-tool-use gate
-├── ux_gate.py            ← UX gate
-├── test_hardening.py     ← Hardening tests
-├── test_ux_gate.py       ← UX gate tests
-├── jobs.py               ← Scheduled jobs
-├── logo/                 ← Logo assets
-└── docs/                 ← Documentation
-```
-
----
-
-## 📄 License
-
-Apache-2.0
+[CONTRIBUTING.md](CONTRIBUTING.md) · [MIT](LICENSE)
